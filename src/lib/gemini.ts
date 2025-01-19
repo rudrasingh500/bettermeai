@@ -262,94 +262,97 @@ export const analyzeImages = async (
     ] = imageParts;
 
     const genderSpecificPrompt = gender === 'female' 
-      ? 'Consider feminine beauty standards and features while maintaining a balanced, inclusive perspective.'
+      ? 'Consider diverse feminine beauty standards across cultures, emphasizing individuality and inclusivity while remaining sensitive to common aesthetic principles.'
       : gender === 'male'
-      ? 'Consider masculine beauty standards and features while maintaining a balanced, inclusive perspective.'
-      : 'Consider gender-neutral beauty standards and features while maintaining an inclusive perspective.';
+      ? 'Consider diverse masculine beauty standards across cultures, emphasizing individuality and inclusivity while remaining sensitive to common aesthetic principles.'
+      : 'Consider diverse gender-neutral beauty standards across cultures, emphasizing individuality and inclusivity while remaining sensitive to common aesthetic principles.';
 
-    const prompt = `Analyze these facial, hair, teeth, and body images and provide a detailed analysis in JSON format. First, check if any images are too blurry or poorly lit. If so, respond with exactly "Image too blurry" and nothing else.
+    const prompt = `Analyze these facial, hair, teeth, and body images and provide a detailed analysis in JSON format. First, evaluate if any images are too blurry, poorly lit, or otherwise unclear. If so, respond with exactly "Image too blurry" and nothing else.
 
-If all images are clear enough, provide your analysis in the following JSON structure. IMPORTANT: The response must be valid JSON that can be parsed with JSON.parse(). DO NOT include any markdown formatting or code blocks.
+        If all images are clear enough, provide your analysis in the following JSON structure. IMPORTANT: The response must be valid JSON that can be parsed with JSON.parse(). DO NOT include any markdown formatting or code blocks.
 
-Consider these aspects for a comprehensive analysis:
+        For your analysis, adhere to the following guidelines:
+        - Use an objective and constructive tone, avoiding subjective or overly critical language.
+        - Ratings should be based on measurable and observable characteristics, ensuring honesty and consistency.
+        - Recommendations must be actionable, practical, and prioritize the user's health, confidence, and well-being over cosmetic changes.
 
-${genderSpecificPrompt}
+        ${genderSpecificPrompt}
 
-{
-  "facial_analysis": {
-    "face_shape": "detailed description of face shape",
-    "symmetry": "detailed analysis of facial symmetry",
-    "proportions": "analysis of facial proportions",
-    "notable_features": ["list", "of", "notable", "features"]
-  },
-  "skin_analysis": {
-    "skin_type": "description of skin type",
-    "texture": "description of skin texture",
-    "concerns": ["list", "of", "skin", "concerns"],
-    "recommendations": ["specific", "skincare", "recommendations"]
-  },
-  "hair_analysis": {
-    "hair_type": "description of hair type",
-    "texture": "description of hair texture",
-    "condition": "analysis of hair condition",
-    "recommendations": ["specific", "hair", "care", "recommendations"]
-  },
-  "teeth_analysis": {
-    "alignment": "description of teeth alignment",
-    "color": "analysis of teeth color",
-    "health": "overall dental health assessment",
-    "concerns": ["list", "of", "dental", "concerns"],
-    "recommendations": ["specific", "dental", "care", "recommendations"]
-  },
-  "body_analysis": {
-    "posture": "analysis of posture and alignment",
-    "body_type": "description of body type",
-    "proportions": "analysis of body proportions",
-    "concerns": ["list", "of", "body", "concerns"],
-    "recommendations": ["specific", "body", "improvement", "recommendations"]
-  },
-  "recommendations": {
-    "skincare": ["detailed", "skincare", "routine", "steps"],
-    "hairstyle": ["hairstyle", "suggestions"],
-    "dental": ["dental", "care", "recommendations"],
-    "fashion": ["clothing", "style", "recommendations"],
-    "products": ["specific", "product", "recommendations"],
-    "improvements": ["areas", "for", "improvement"],
-    "lifestyle": {
-      "fitness": ["exercise", "recommendations"],
-      "nutrition": ["diet", "suggestions"],
-      "sleep": ["sleep", "improvement", "tips"],
-      "posture": ["posture", "correction", "advice"],
-      "grooming": ["grooming", "routine", "steps"],
-      "fashion": ["style", "recommendations"],
-      "dental": ["dental", "care", "tips"],
-      "confidence": ["confidence", "building", "suggestions"]
-    }
-  },
-  "ratings": {
-    "face_rating": number between 1-10,
-    "hair_rating": number between 1-10,
-    "teeth_rating": number between 1-10,
-    "body_rating": number between 1-10,
-    "overall_rating": weighted average
-  }
-}
+        {
+          "facial_analysis": {
+            "face_shape": "detailed description of face shape",
+            "symmetry": "detailed analysis of facial symmetry, noting both strengths and areas for improvement",
+            "proportions": "objective analysis of facial proportions based on standardized ratios",
+            "notable_features": ["list", "of", "distinctive", "features"]
+          },
+          "skin_analysis": {
+            "skin_type": "description of skin type based on observable characteristics (e.g., oily, dry, combination, normal)",
+            "texture": "description of skin texture, including any visible irregularities",
+            "concerns": ["list", "of", "skin", "concerns (if any)"],
+            "recommendations": ["specific, actionable, and achievable", "skincare", "steps or products"]
+          },
+          "hair_analysis": {
+            "hair_type": "description of hair type (e.g., straight, wavy, curly, coily)",
+            "texture": "description of hair texture (e.g., fine, coarse, thick)",
+            "condition": "objective analysis of hair condition, noting both strengths and areas for improvement",
+            "recommendations": ["specific", "hair", "care", "recommendations tailored to user needs"]
+          },
+          "teeth_analysis": {
+            "alignment": "objective description of teeth alignment",
+            "color": "analysis of teeth color, considering natural variation and potential for whitening",
+            "health": "overall dental health assessment based on visible factors",
+            "concerns": ["list", "of", "dental", "concerns (if any)"],
+            "recommendations": ["specific, practical", "dental", "care", "steps or products"]
+          },
+          "body_analysis": {
+            "posture": "objective analysis of posture and alignment",
+            "body_type": "description of body type based on observable traits",
+            "proportions": "analysis of body proportions relative to general balance and symmetry",
+            "concerns": ["list", "of", "body", "concerns (if any)"],
+            "recommendations": ["specific, actionable", "steps for", "fitness or posture improvement"]
+          },
+          "recommendations": {
+            "skincare": ["specific", "and", "practical", "skincare", "routine", "steps"],
+            "hairstyle": ["hairstyle suggestions", "based on hair type and face shape"],
+            "dental": ["specific", "dental", "care", "recommendations"],
+            "fashion": ["clothing", "style", "recommendations tailored to body proportions"],
+            "products": ["specific", "product", "recommendations", "with justifications"],
+            "improvements": ["areas", "for", "improvement with actionable advice"],
+            "lifestyle": {
+              "fitness": ["fitness recommendations tailored to body type and goals"],
+              "nutrition": ["dietary suggestions for balanced health"],
+              "sleep": ["practical sleep improvement tips"],
+              "posture": ["actionable posture correction advice"],
+              "grooming": ["customized grooming routine steps"],
+              "fashion": ["personalized style suggestions"],
+              "dental": ["dental care tips for long-term health"],
+              "confidence": ["confidence-building suggestions grounded in self-acceptance"]
+            }
+          },
+          "ratings": {
+            "face_rating": number between 1-10,
+            "hair_rating": number between 1-10,
+            "teeth_rating": number between 1-10,
+            "body_rating": number between 1-10,
+            "overall_rating": weighted average
+          }
+        }
 
-Ensure all ratings are on a scale of 1-10, where:
-1-3: Needs significant improvement
-4-6: Average, room for improvement
-7-8: Above average
-9-10: Exceptional
+        Ensure all ratings are on a scale of 1-10, where:
+        1-3: Needs significant improvement
+        4-6: Average, room for improvement
+        7-8: Above average
+        9-10: Exceptional
 
-Base the overall_rating on a weighted average:
-- Face: 35%
-- Hair: 25%
-- Teeth: 20%
-- Body: 20%
+        Base the overall_rating on a weighted average:
+        - Face: 35%
+        - Hair: 25%
+        - Teeth: 20%
+        - Body: 20%
 
-Provide specific, actionable recommendations for improvement in each category.
+        Focus on providing insights and advice that empower the user to make informed, positive changes. Avoid judgments and prioritize constructive feedback.
+        CRITICAL: Your response must be ONLY the JSON object, with no additional text before or after.`;
 
-CRITICAL: Your response must be ONLY the JSON object, with no additional text before or after.`;
 
     const result = await model.generateContent({
       contents: [{

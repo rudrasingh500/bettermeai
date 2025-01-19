@@ -261,22 +261,22 @@ export const Community = () => {
       );
     }
 
-    const pendingConnections = connections.filter(c => 
+    const pendingIncomingConnections = connections.filter(c => 
       c.status === 'pending' && c.user2_id === user?.id
+    );
+    const pendingOutgoingConnections = connections.filter(c => 
+      c.status === 'pending' && c.user1_id === user?.id
     );
     const acceptedConnections = connections.filter(c => c.status === 'accepted');
 
     return (
       <div className="space-y-6">
-        {pendingConnections.length > 0 && (
+        {pendingIncomingConnections.length > 0 && (
           <div>
-            <h3 className="text-lg font-semibold mb-4">Pending Connections</h3>
+            <h3 className="text-lg font-semibold mb-4">Pending Requests</h3>
             <div className="space-y-4">
-              {pendingConnections.map(connection => {
-                const otherUser = connection.user1_id === user?.id
-                  ? connection.user2
-                  : connection.user1;
-
+              {pendingIncomingConnections.map(connection => {
+                const otherUser = connection.user1;
                 return (
                   <div key={connection.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
                     <div className="flex items-center gap-4">
@@ -290,22 +290,47 @@ export const Community = () => {
                         </div>
                       </div>
                     </div>
-                    {connection.user1_id === user?.id && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleAcceptConnection(connection.id)}
-                          className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAcceptConnection(connection.id)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                      >
+                        <UserCheck className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleRejectConnection(connection.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                      >
+                        <UserX className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {pendingOutgoingConnections.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Sent Requests</h3>
+            <div className="space-y-4">
+              {pendingOutgoingConnections.map(connection => {
+                const otherUser = connection.user2;
+                return (
+                  <div key={connection.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <Avatar url={otherUser.avatar_url} size={48} username={otherUser.username} />
+                      <div>
+                        <div 
+                          className="font-medium cursor-pointer hover:text-blue-600"
+                          onClick={() => handleViewProfile(otherUser.username)}
                         >
-                          <UserCheck className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => handleRejectConnection(connection.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-full"
-                        >
-                          <UserX className="w-5 h-5" />
-                        </button>
+                          {otherUser.username}
+                        </div>
                       </div>
-                    )}
+                    </div>
+                    <span className="text-sm text-gray-500">Pending</span>
                   </div>
                 );
               })}
