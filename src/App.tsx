@@ -4,9 +4,11 @@ import { useAuthStore } from './lib/store';
 import Navbar from './components/Navbar';
 import Analysis from './components/Analysis/index';
 import Profile from './components/Profile';
-import Community from './components/Community';
+import { Community } from './components/Community/Community';
 import Login from './components/Login';
 import Landing from './components/Landing';
+import { ViewProfile } from './pages/ViewProfile';
+import { usePrefetch } from './hooks/usePrefetch';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading, initialized } = useAuthStore();
@@ -24,6 +26,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 function App() {
   const { user, isLoading, initialized } = useAuthStore();
+
+  // Start prefetching data
+  usePrefetch();
 
   if (!initialized || isLoading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
@@ -78,6 +83,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/profile/:username" element={<ViewProfile />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

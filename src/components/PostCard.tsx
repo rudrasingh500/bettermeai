@@ -1,7 +1,8 @@
 import React from 'react';
-import { MessageSquare, Heart, Award, ThumbsUp } from 'lucide-react';
+import { MessageSquare, Heart, Award, ThumbsUp, User } from 'lucide-react';
 import { RatingDisplay } from './Analysis/RatingDisplay';
 import type { Post } from '../lib/types';
+import { useNavigate } from 'react-router-dom';
 
 interface PostCardProps {
   post: Post;
@@ -16,23 +17,30 @@ export const PostCard: React.FC<PostCardProps> = ({
   onReact,
   showActions = true
 }) => {
+  const navigate = useNavigate();
+
+  const handleProfileClick = (username: string) => {
+    navigate(`/profile/${username}`, { state: { from: location.pathname } });
+  };
+
   const renderAnalysisPost = () => {
     if (!post.analyses) return null;
     
-    let analysis;
-    try {
-      analysis = JSON.parse(post.analyses.analysis_text || '{}');
-      if (!analysis || !analysis.ratings) return null;
-    } catch (err) {
-      console.warn('Error parsing analysis data:', err);
-      return null;
+    let analysisRatings: Array<{ value: number; label: string }> = [];
+    if (post.analyses.analysis_text) {
+      try {
+        const analysis = JSON.parse(post.analyses.analysis_text);
+        if (analysis?.ratings) {
+          analysisRatings = [
+            { value: analysis.ratings.overall_rating, label: 'Overall Rating' },
+            { value: analysis.ratings.face_rating, label: 'Face Rating' },
+            { value: analysis.ratings.hair_rating, label: 'Hair Rating' }
+          ].filter(rating => typeof rating.value === 'number' && !isNaN(rating.value));
+        }
+      } catch (err) {
+        console.warn('Error parsing analysis data:', err);
+      }
     }
-
-    const validRatings = [
-      { value: analysis.ratings.overall_rating, label: 'Overall Rating' },
-      { value: analysis.ratings.face_rating, label: 'Face Rating' },
-      { value: analysis.ratings.hair_rating, label: 'Hair Rating' }
-    ].filter(rating => typeof rating.value === 'number' && !isNaN(rating.value));
 
     return (
       <div className="space-y-4">
@@ -66,9 +74,9 @@ export const PostCard: React.FC<PostCardProps> = ({
             )}
           </div>
         </div>
-        {validRatings.length > 0 && (
+        {analysisRatings.length > 0 && (
           <RatingDisplay
-            ratings={validRatings}
+            ratings={analysisRatings}
             size="sm"
           />
         )}
@@ -77,40 +85,83 @@ export const PostCard: React.FC<PostCardProps> = ({
   };
 
   const renderBeforeAfterPost = () => {
-    const beforeImageUrl = post.before_analysis?.front_image_url || post.before_image_url;
-    const afterImageUrl = post.after_analysis?.front_image_url || post.after_image_url;
+    // Get before images (prefer analysis images if available)
+    const beforeFrontImage = post.before_analysis?.front_image_url || post.before_image_url;
+    const beforeSideImage = post.before_analysis?.left_side_image_url;
+    const beforeRating = post.before_analysis?.overall_rating;
+
+    // Get after images (prefer analysis images if available)
+    const afterFrontImage = post.after_analysis?.front_image_url || post.after_image_url;
+    const afterSideImage = post.after_analysis?.left_side_image_url;
+    const afterRating = post.after_analysis?.overall_rating;
 
     return (
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Before</h4>
-          {beforeImageUrl ? (
-            <img
-              src={beforeImageUrl}
-              alt="Before"
-              className="w-full h-48 object-cover rounded-lg"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-              <span className="text-gray-400">No before image</span>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium text-gray-700">Before</h4>
+            <div className="space-y-2">
+              {beforeFrontImage && (
+                <img
+                  src={beforeFrontImage}
+                  alt="Before front view"
+                  className="w-full h-48 object-cover rounded-lg"
+                  loading="lazy"
+                />
+              )}
+              {beforeSideImage && (
+                <img
+                  src={beforeSideImage}
+                  alt="Before side view"
+                  className="w-full h-48 object-cover rounded-lg"
+                  loading="lazy"
+                />
+              )}
+              {!beforeFrontImage && !beforeSideImage && (
+                <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-400">No before images</span>
+                </div>
+              )}
+              {beforeRating !== null && beforeRating !== undefined && (
+                <RatingDisplay
+                  ratings={[{ value: beforeRating, label: 'Before Rating' }]}
+                  size="sm"
+                />
+              )}
             </div>
-          )}
-        </div>
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">After</h4>
-          {afterImageUrl ? (
-            <img
-              src={afterImageUrl}
-              alt="After"
-              className="w-full h-48 object-cover rounded-lg"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-              <span className="text-gray-400">No after image</span>
+          </div>
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium text-gray-700">After</h4>
+            <div className="space-y-2">
+              {afterFrontImage && (
+                <img
+                  src={afterFrontImage}
+                  alt="After front view"
+                  className="w-full h-48 object-cover rounded-lg"
+                  loading="lazy"
+                />
+              )}
+              {afterSideImage && (
+                <img
+                  src={afterSideImage}
+                  alt="After side view"
+                  className="w-full h-48 object-cover rounded-lg"
+                  loading="lazy"
+                />
+              )}
+              {!afterFrontImage && !afterSideImage && (
+                <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-400">No after images</span>
+                </div>
+              )}
+              {afterRating !== null && afterRating !== undefined && (
+                <RatingDisplay
+                  ratings={[{ value: afterRating, label: 'After Rating' }]}
+                  size="sm"
+                />
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     );
@@ -122,13 +173,33 @@ export const PostCard: React.FC<PostCardProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm p-4 md:p-6">
       <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {post.profiles && (
-            <span className="font-medium text-gray-900">{post.profiles.username}</span>
+            <>
+              <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                {post.profiles.avatar_url ? (
+                  <img 
+                    src={post.profiles.avatar_url} 
+                    alt={post.profiles.username}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <User className="w-full h-full p-2 text-gray-400" />
+                )}
+              </div>
+              <div>
+                <div 
+                  onClick={() => handleProfileClick(post.profiles?.username || '')}
+                  className="font-medium cursor-pointer hover:text-blue-600"
+                >
+                  {post.profiles?.username}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {new Date(post.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            </>
           )}
-          <span className="text-sm text-gray-500">
-            {new Date(post.created_at).toLocaleDateString()}
-          </span>
         </div>
         <div className="text-sm text-gray-500">
           {post.type === 'analysis' ? 'Analysis Share' : 'Progress Update'}
@@ -179,6 +250,34 @@ export const PostCard: React.FC<PostCardProps> = ({
           </button>
         </div>
       )}
+
+      {post.comments?.map(comment => (
+        <div key={comment.id} className="flex gap-3 py-2">
+          <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
+            {comment.profiles?.avatar_url ? (
+              <img 
+                src={comment.profiles.avatar_url} 
+                alt={comment.profiles.username}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <User className="w-full h-full p-1.5 text-gray-400" />
+            )}
+          </div>
+          <div>
+            <div 
+              onClick={() => handleProfileClick(comment.profiles?.username || '')}
+              className="font-medium cursor-pointer hover:text-blue-600"
+            >
+              {comment.profiles?.username}
+            </div>
+            <p className="text-gray-700 text-sm">{comment.content}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {new Date(comment.created_at).toLocaleDateString()}
+            </p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }; 

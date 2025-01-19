@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Camera, Users, User, LogOut, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
+import { NotificationsPopover } from './NotificationsPopover';
 
 const Navbar = () => {
   const { user, signOut } = useAuthStore();
@@ -63,6 +64,8 @@ const Navbar = () => {
         <span>Profile</span>
       </Link>
 
+      <NotificationsPopover />
+
       <button
         onClick={() => {
           setIsMenuOpen(false);
@@ -94,12 +97,15 @@ const Navbar = () => {
               </div>
 
               {/* Mobile Navigation */}
-              <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="md:hidden text-gray-600 hover:text-gray-900"
-              >
-                {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
+              <div className="flex items-center gap-2 md:hidden">
+                <NotificationsPopover />
+                <button
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -109,7 +115,43 @@ const Navbar = () => {
       {isMenuOpen && user && (
         <div className="fixed inset-0 top-16 bg-white md:hidden">
           <div className="container mx-auto px-4 py-4 flex flex-col gap-6">
-            <NavLinks />
+            <Link
+              to="/analysis"
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Camera className="w-5 h-5" />
+              <span>Analysis</span>
+            </Link>
+            
+            <Link
+              to="/community"
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <Users className="w-5 h-5" />
+              <span>Community</span>
+            </Link>
+            
+            <Link
+              to="/profile"
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <User className="w-5 h-5" />
+              <span>Profile</span>
+            </Link>
+
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                handleSignOut();
+              }}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Sign Out</span>
+            </button>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Profile } from './types';
+import { HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 
 // Get API key from environment variables
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -21,20 +22,20 @@ const model = genAI.getGenerativeModel({
   },
   safetySettings: [
     {
-      category: "HARM_CATEGORY_HARASSMENT",
-      threshold: "BLOCK_NONE",
+      category: "HARM_CATEGORY_HARASSMENT" as HarmCategory,
+      threshold: "BLOCK_NONE" as HarmBlockThreshold,
     },
     {
-      category: "HARM_CATEGORY_HATE_SPEECH",
-      threshold: "BLOCK_NONE",
+      category: "HARM_CATEGORY_HATE_SPEECH" as HarmCategory,
+      threshold: "BLOCK_NONE" as HarmBlockThreshold,
     },
     {
-      category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-      threshold: "BLOCK_NONE",
+      category: "HARM_CATEGORY_SEXUALLY_EXPLICIT" as HarmCategory,
+      threshold: "BLOCK_NONE" as HarmBlockThreshold,
     },
     {
-      category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-      threshold: "BLOCK_NONE",
+      category: "HARM_CATEGORY_DANGEROUS_CONTENT" as HarmCategory,
+      threshold: "BLOCK_NONE" as HarmBlockThreshold,
     },
   ],
 });
@@ -400,10 +401,11 @@ CRITICAL: Your response must be ONLY the JSON object, with no additional text be
       // Ensure ratings are within bounds and are numbers
       const { ratings } = parsedResponse;
       Object.keys(ratings).forEach(key => {
-        if (typeof ratings[key] === 'string') {
-          ratings[key] = parseFloat(ratings[key]);
+        const value = ratings[key as keyof typeof ratings];
+        if (typeof value === 'string') {
+          ratings[key as keyof typeof ratings] = parseFloat(value);
         }
-        ratings[key] = Math.max(1, Math.min(10, ratings[key]));
+        ratings[key as keyof typeof ratings] = Math.max(1, Math.min(10, Number(ratings[key as keyof typeof ratings])));
       });
 
       return parsedResponse;

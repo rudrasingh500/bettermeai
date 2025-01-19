@@ -3,11 +3,12 @@ import { supabase } from '../../../lib/supabase';
 import type { Profile } from '../../../lib/types';
 
 interface ConnectionWithProfiles {
+  id: string;
   user1_id: string;
   user2_id: string;
   status: string;
-  profiles_user1: Profile;
-  profiles_user2: Profile;
+  user1: Profile;
+  user2: Profile;
 }
 
 interface Connection {
@@ -27,36 +28,39 @@ export const useConnections = (userId: string) => {
 
     try {
       setIsLoading(true);
-      const { data, error: connectionsError } = await supabase
+      const { data, error: err } = await supabase
         .from('connections')
         .select(`
-          *,
-          profiles_user1:profiles!connections_user1_id_fkey (
-            id, username, rating
+          id,
+          user1_id,
+          user2_id,
+          status,
+          user1:profiles!connections_user1_id_fkey (
+            id, username, avatar_url, rating
           ),
-          profiles_user2:profiles!connections_user2_id_fkey (
-            id, username, rating
+          user2:profiles!connections_user2_id_fkey (
+            id, username, avatar_url, rating
           )
         `)
         .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
 
-      if (connectionsError) throw connectionsError;
+      if (err) throw err;
 
-      // Transform connections data
-      const connections = (data || []).map((connection: ConnectionWithProfiles) => {
-        const isUser1 = connection.user1_id === userId;
+      const transformedConnections = (data || []).map(conn => {
+        const user1 = conn.user1 as unknown as Profile;
+        const user2 = conn.user2 as unknown as Profile;
         return {
-          profile: isUser1 ? connection.profiles_user2 : connection.profiles_user1,
-          status: connection.status,
-          outgoing: isUser1
+          profile: conn.user1_id === userId ? user2 : user1,
+          status: conn.status,
+          outgoing: conn.user1_id === userId
         };
       });
 
-      setMyConnections(connections);
+      setMyConnections(transformedConnections);
       setError(null);
     } catch (err) {
       console.error('Error fetching connections:', err);
-      setError('Failed to load connections');
+      setError('Failed to fetch connections');
     } finally {
       setIsLoading(false);
     }
@@ -77,24 +81,15 @@ export const useConnections = (userId: string) => {
       const excludeIds = [
         userId,
         ...existingConnections?.map(c => c.user1_id === userId ? c.user2_id : c.user1_id) || []
-      ];
+      ].filter(Boolean);
 
       // Handle case when there are no connections
-      const query = excludeIds.length > 1
-        ? supabase
-            .from('profiles')
-            .select('*')
-            .not('id', 'in', `(${excludeIds.join(',')})`)
-            .gte('rating', userRating - 1)
-            .lte('rating', userRating + 1)
-        : supabase
-            .from('profiles')
-            .select('*')
-            .neq('id', userId)
-            .gte('rating', userRating - 1)
-            .lte('rating', userRating + 1);
-
-      const { data, error } = await query;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .gte('rating', userRating - 1)
+        .lte('rating', userRating + 1)
+        .not('id', 'in', `(${excludeIds.join(',')})`);
 
       if (error) throw error;
 
@@ -117,7 +112,8 @@ export const useConnections = (userId: string) => {
           user1_id: userId,
           user2_id: profileId,
           status: 'pending'
-        }]);
+        }])
+        .select();
 
       if (error) throw error;
       await fetchConnections();
@@ -136,7 +132,8 @@ export const useConnections = (userId: string) => {
       const { error } = await supabase
         .from('connections')
         .update({ status })
-        .or(`and(user1_id.eq.${profileId},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${profileId})`);
+        .or(`and(user1_id.eq.${profileId},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${profileId})`)
+        .eq('status', 'pending');
 
       if (error) throw error;
       await fetchConnections();

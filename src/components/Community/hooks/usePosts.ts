@@ -24,7 +24,7 @@ export const usePosts = (userId: string) => {
         .from('posts')
         .select(`
           *,
-          profiles (id, username),
+          profiles (id, username, avatar_url),
           analyses!posts_analysis_id_fkey (
             id, front_image_url, left_side_image_url, analysis_text
           ),
@@ -36,7 +36,7 @@ export const usePosts = (userId: string) => {
           ),
           comments (
             id, content, created_at,
-            profiles (id, username)
+            profiles (id, username, avatar_url)
           ),
           reactions (id, type, user_id)
         `)

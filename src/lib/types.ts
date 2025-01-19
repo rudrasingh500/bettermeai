@@ -5,6 +5,8 @@ export interface Profile {
   username: string;
   gender: 'male' | 'female' | 'other';
   rating: number | null;
+  avatar_url: string | null;
+  bio?: string;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +27,7 @@ export interface Analysis {
   body_rating: number | null;
   overall_rating: number | null;
   created_at: string;
+  posts?: Post[];
 }
 
 export interface Post {
@@ -71,6 +74,8 @@ export interface Connection {
   user2_id: string;
   status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
+  user1: Profile;
+  user2: Profile;
 }
 
 export interface AuthState {
@@ -82,4 +87,16 @@ export interface AuthState {
   signUp: (email: string, password: string, username: string, gender: Profile['gender']) => Promise<Profile>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
+}
+
+export type NotificationType = 
+  | 'connection_request'
+  | 'connection_accepted'
+  | 'comment'
+  | 'reaction'
+  | 'connection_post';
+
+export interface Rating {
+  value: number | null;
+  label: string;
 }

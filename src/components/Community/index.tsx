@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 import { CreatePost } from './CreatePost';
 import { Feed } from './Feed';
@@ -7,9 +7,11 @@ import { useConnections } from './hooks/useConnections';
 import { usePosts } from './hooks/usePosts';
 import type { Analysis, Profile } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
+import { User } from 'lucide-react';
 
 const Community = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isLoading: authLoading } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'connections' | 'community'>('community');
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
@@ -43,6 +45,12 @@ const Community = () => {
     if (!authLoading && !user) {
       navigate('/login');
     } else if (user && !authLoading) {
+      // Set active tab from navigation state if available
+      const state = location.state as { activeTab?: 'connections' | 'community' };
+      if (state?.activeTab) {
+        setActiveTab(state.activeTab);
+      }
+
       const loadData = async () => {
         try {
           if (isFetchingRef.current) return;
@@ -115,6 +123,10 @@ const Community = () => {
   }) => {
     await createPost(data);
     setShowCreatePost(false);
+  };
+
+  const handleProfileClick = (username: string) => {
+    navigate(`/profile/${username}`, { state: { from: '/community' } });
   };
 
   const isLoading = authLoading || connectionsLoading || postsLoading;
@@ -191,9 +203,27 @@ const Community = () => {
                   ) : (
                     myConnections.map(({ profile, status, outgoing }) => (
                       <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">{profile.username}</p>
-                          <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                            {profile.avatar_url ? (
+                              <img 
+                                src={profile.avatar_url} 
+                                alt={profile.username}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <User className="w-full h-full p-2 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <div 
+                              onClick={() => handleProfileClick(profile.username)}
+                              className="cursor-pointer hover:text-blue-600"
+                            >
+                              {profile.username}
+                            </div>
+                            <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                          </div>
                         </div>
                         {status === 'pending' && !outgoing && (
                           <div className="flex gap-2">
@@ -235,9 +265,27 @@ const Community = () => {
                   <div className="space-y-4">
                     {potentialConnections.map(profile => (
                       <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">{profile.username}</p>
-                          <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                            {profile.avatar_url ? (
+                              <img 
+                                src={profile.avatar_url} 
+                                alt={profile.username}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <User className="w-full h-full p-2 text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <div 
+                              onClick={() => handleProfileClick(profile.username)}
+                              className="cursor-pointer hover:text-blue-600"
+                            >
+                              {profile.username}
+                            </div>
+                            <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                          </div>
                         </div>
                         <button
                           onClick={() => sendConnectionRequest(profile.id, user.rating!)}
@@ -271,7 +319,12 @@ const Community = () => {
                 {myConnections.slice(0, 3).map(({ profile, status }) => (
                   <div key={profile.id} className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">{profile.username}</p>
+                      <div 
+                        onClick={() => handleProfileClick(profile.username)}
+                        className="cursor-pointer hover:text-blue-600"
+                      >
+                        {profile.username}
+                      </div>
                       <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
                     </div>
                     {status === 'accepted' && (

@@ -14,11 +14,14 @@ const Profile = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [latestRating, setLatestRating] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'analyses' | 'posts'>('analyses');
   const [isLoading2, setIsLoading2] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const isFetchingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     if (!user || isFetchingRef.current) return;
@@ -37,10 +40,21 @@ const Profile = () => {
           .from('posts')
           .select(`
             *,
+            profiles (id, username, avatar_url),
             analyses!posts_analysis_id_fkey (
               id,
               front_image_url,
               left_side_image_url,
+              analysis_text
+            ),
+            before_analysis:analyses!posts_before_analysis_id_fkey (
+              id,
+              front_image_url,
+              analysis_text
+            ),
+            after_analysis:analyses!posts_after_analysis_id_fkey (
+              id,
+              front_image_url,
               analysis_text
             ),
             comments (
@@ -49,7 +63,8 @@ const Profile = () => {
               created_at,
               profiles (
                 id,
-                username
+                username,
+                avatar_url
               )
             ),
             reactions (
@@ -95,6 +110,7 @@ const Profile = () => {
       navigate('/login');
     } else if (user && !isLoading) {
       setUsername(user.username);
+      setBio(user.bio || '');
       setIsLoading2(true);
       fetchData();
     }
@@ -134,7 +150,7 @@ const Profile = () => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ username })
+        .update({ username, bio })
         .eq('id', user.id);
 
       if (error) throw error;
@@ -149,6 +165,88 @@ const Profile = () => {
       useAuthStore.setState({ user: data });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !e.target.files?.[0]) return;
+    
+    try {
+      setUploadingAvatar(true);
+      const file = e.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('File size must be less than 5MB');
+      }
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('File must be an image');
+      }
+
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      const validExtensions = ['jpg', 'jpeg', 'png', 'gif'];
+      
+      if (!fileExt || !validExtensions.includes(fileExt)) {
+        throw new Error('Invalid file type. Please upload a JPG, PNG, or GIF');
+      }
+
+      const fileName = `${user.id}/avatar.${fileExt}`;
+      console.log('Uploading file:', fileName);
+      
+      // Upload image to Supabase Storage
+      const { error: uploadError, data } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { 
+          upsert: true,
+          contentType: file.type
+        });
+      
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', data);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      console.log('Public URL:', publicUrl);
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) {
+        console.error('Profile update error:', updateError);
+        throw updateError;
+      }
+
+      console.log('Profile updated successfully');
+
+      // Update local user state
+      useAuthStore.setState({ 
+        user: { ...user, avatar_url: publicUrl }
+      });
+
+      // Clear any previous errors
+      setError(null);
+
+    } catch (err) {
+      console.error('Error uploading avatar:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload profile picture');
+    } finally {
+      setUploadingAvatar(false);
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -256,82 +354,128 @@ const Profile = () => {
     );
   };
 
-  if (!initialized || isLoading) {
+  if (isLoading || isLoading2 || !user) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    return null;
-  }
-
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 md:space-y-8">
-      {/* Profile Header */}
-      <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-4">
-            <div className="bg-blue-100 p-3 rounded-full">
-              <User className="w-8 h-8 text-blue-600" />
-            </div>
-            {isEditing ? (
-              <form onSubmit={handleUpdateProfile} className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="border rounded-md px-2 py-1"
-                  required
+    <div className="max-w-6xl mx-auto p-4 md:p-6">
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full bg-gray-100 overflow-hidden">
+              {user.avatar_url ? (
+                <img 
+                  src={user.avatar_url} 
+                  alt={user.username}
+                  className="w-full h-full object-cover"
                 />
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setUsername(user.username);
-                  }}
-                  className="text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
+              ) : (
+                <User className="w-full h-full p-4 text-gray-400" />
+              )}
+            </div>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute bottom-0 right-0 p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+            >
+              {uploadingAvatar ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4" />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+          </div>
+
+          <div className="flex-1">
+            {isEditing ? (
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div>
+                  <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                    Username
+                  </label>
+                  <input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter username"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
+                    Bio & Goals
+                  </label>
+                  <textarea
+                    id="bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    className="w-full h-32 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Share your goals and a bit about yourself..."
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setUsername(user.username);
+                      setBio(user.bio || '');
+                    }}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </form>
             ) : (
-              <div>
-                <h1 className="text-2xl font-bold">{user.username}</h1>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="text-2xl font-semibold">{user.username}</h1>
+                  {latestRating && (
+                    <p className="text-gray-600">Current Rating: {latestRating.toFixed(1)}</p>
+                  )}
+                  {user.bio && (
+                    <p className="mt-4 text-gray-700 whitespace-pre-wrap">{user.bio}</p>
+                  )}
+                </div>
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Edit Profile
                 </button>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600">
-                {latestRating ? latestRating.toFixed(1) : 'N/A'}
-              </div>
-              <div className="text-sm text-gray-600">Latest Rating</div>
-            </div>
-            <button
-              onClick={() => navigate('/analysis')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              <Camera className="w-5 h-5" />
-              <span>New Analysis</span>
-            </button>
-          </div>
         </div>
-        {error && <div className="mt-2 text-red-600 text-sm">{error}</div>}
       </div>
 
       {/* Tabs */}
