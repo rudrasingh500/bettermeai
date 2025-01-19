@@ -14,6 +14,15 @@ export const usePrefetchedData = <T>(
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const updateData = (newData: T[]) => {
+    // Update both state and cache
+    setData(newData);
+    localStorage.setItem(`prefetched_${key}`, JSON.stringify({
+      data: newData,
+      timestamp: Date.now()
+    }));
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
@@ -49,27 +58,18 @@ export const usePrefetchedData = <T>(
           const freshData = await fetchFn();
           console.log(`Received fresh ${key} data:`, freshData);
           
-          if (freshData && Array.isArray(freshData)) {
-            setData(freshData);
-            
-            // Update cache
-            localStorage.setItem(`prefetched_${key}`, JSON.stringify({
-              data: freshData,
-              timestamp: Date.now()
-            }));
-          }
+          // Update both state and cache
+          updateData(freshData);
         }
       } catch (error) {
-        console.error(`Error in usePrefetchedData for ${key}:`, error);
-        // Clear potentially corrupted cache on error
-        localStorage.removeItem(`prefetched_${key}`);
+        console.error(`Error loading ${key} data:`, error);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadData();
-  }, [key, fetchFn, maxAge]);
+  }, [key, maxAge, fetchFn]);
 
-  return { data, isLoading };
+  return { data, isLoading, updateData };
 }; 

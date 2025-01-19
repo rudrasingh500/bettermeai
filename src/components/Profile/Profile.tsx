@@ -62,10 +62,10 @@ export const Profile: React.FC<ProfileProps> = ({ profile, isOwnProfile = false 
               id, front_image_url, left_side_image_url, analysis_text
             ),
             before_analysis:analyses!posts_before_analysis_id_fkey (
-              id, front_image_url, analysis_text
+              id, front_image_url, analysis_text, overall_rating
             ),
             after_analysis:analyses!posts_after_analysis_id_fkey (
-              id, front_image_url, analysis_text
+              id, front_image_url, analysis_text, overall_rating
             ),
             comments (
               id, content, created_at,
@@ -134,12 +134,15 @@ export const Profile: React.FC<ProfileProps> = ({ profile, isOwnProfile = false 
       if (fetchError) throw fetchError;
       if (!data) throw new Error('Connection not found');
 
-      const { error: deleteError } = await supabase
-        .from('connections')
-        .delete()
-        .eq('id', data.id);
+      const { error: removeError } = await supabase
+        .rpc('remove_connection', {
+          connection_id: data.id,
+          user_id: user.id
+        });
 
-      if (deleteError) throw deleteError;
+      if (removeError) throw removeError;
+      
+      // Update local state
       setConnectionStatus('none');
     } catch (err) {
       console.error('Error removing connection:', err);

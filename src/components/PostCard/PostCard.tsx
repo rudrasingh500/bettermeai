@@ -1,8 +1,9 @@
 import React from 'react';
 import { MessageSquare, Heart, Award, ThumbsUp, User } from 'lucide-react';
-import { RatingDisplay } from './Analysis/RatingDisplay';
-import type { Post } from '../lib/types';
+import { RatingDisplay } from '../Analysis/RatingDisplay';
+import type { Post } from '../../lib/types';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../lib/store';
 
 interface PostCardProps {
   post: Post;
@@ -20,17 +21,20 @@ export const PostCard: React.FC<PostCardProps> = ({
   onUpdate
 }) => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
 
   const handleProfileClick = (username: string) => {
     navigate(`/profile/${username}`, { state: { from: location.pathname } });
   };
 
-  const handleReaction = async (type: string) => {
+  const handleReaction = async (type: 'like' | 'helpful' | 'insightful') => {
     try {
-      // ... existing reaction logic ...
-
-      // Call onUpdate if provided
-      onUpdate?.();
+      if (onReact) {
+        await onReact(post.id, type);
+        if (onUpdate) {
+          await onUpdate();
+        }
+      }
     } catch (err) {
       console.error('Error handling reaction:', err);
     }
@@ -38,10 +42,12 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const handleComment = async (content: string) => {
     try {
-      // ... existing comment logic ...
-
-      // Call onUpdate if provided
-      onUpdate?.();
+      if (onComment) {
+        await onComment(post.id, content);
+        if (onUpdate) {
+          await onUpdate();
+        }
+      }
     } catch (err) {
       console.error('Error posting comment:', err);
     }
@@ -99,25 +105,29 @@ export const PostCard: React.FC<PostCardProps> = ({
           </div>
         </div>
         {analysisRatings.length > 0 && (
-          <RatingDisplay
-            ratings={analysisRatings}
-            size="sm"
-          />
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <RatingDisplay
+              ratings={analysisRatings}
+              size="sm"
+            />
+          </div>
         )}
       </div>
     );
   };
 
   const renderBeforeAfterPost = () => {
-    // Get before images (prefer analysis images if available)
+    // Get front images and ratings
     const beforeFrontImage = post.before_analysis?.front_image_url || post.before_image_url;
-    const beforeSideImage = post.before_analysis?.left_side_image_url;
     const beforeRating = post.before_analysis?.overall_rating;
 
-    // Get after images (prefer analysis images if available)
     const afterFrontImage = post.after_analysis?.front_image_url || post.after_image_url;
-    const afterSideImage = post.after_analysis?.left_side_image_url;
     const afterRating = post.after_analysis?.overall_rating;
+
+    // Calculate rating difference if both ratings exist
+    const ratingDifference = beforeRating !== null && afterRating !== null && beforeRating !== undefined && afterRating !== undefined
+      ? (afterRating - beforeRating).toFixed(1)
+      : null;
 
     return (
       <div className="space-y-4">
@@ -125,68 +135,63 @@ export const PostCard: React.FC<PostCardProps> = ({
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-gray-700">Before</h4>
             <div className="space-y-2">
-              {beforeFrontImage && (
+              {beforeFrontImage ? (
                 <img
                   src={beforeFrontImage}
                   alt="Before front view"
                   className="w-full h-48 object-cover rounded-lg"
                   loading="lazy"
                 />
-              )}
-              {beforeSideImage && (
-                <img
-                  src={beforeSideImage}
-                  alt="Before side view"
-                  className="w-full h-48 object-cover rounded-lg"
-                  loading="lazy"
-                />
-              )}
-              {!beforeFrontImage && !beforeSideImage && (
+              ) : (
                 <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <span className="text-gray-400">No before images</span>
+                  <span className="text-gray-400">No image</span>
                 </div>
               )}
               {beforeRating !== null && beforeRating !== undefined && (
-                <RatingDisplay
-                  ratings={[{ value: beforeRating, label: 'Before Rating' }]}
-                  size="sm"
-                />
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <RatingDisplay
+                    ratings={[{ value: beforeRating, label: 'Overall Rating' }]}
+                    size="sm"
+                  />
+                </div>
               )}
             </div>
           </div>
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-gray-700">After</h4>
             <div className="space-y-2">
-              {afterFrontImage && (
+              {afterFrontImage ? (
                 <img
                   src={afterFrontImage}
                   alt="After front view"
                   className="w-full h-48 object-cover rounded-lg"
                   loading="lazy"
                 />
-              )}
-              {afterSideImage && (
-                <img
-                  src={afterSideImage}
-                  alt="After side view"
-                  className="w-full h-48 object-cover rounded-lg"
-                  loading="lazy"
-                />
-              )}
-              {!afterFrontImage && !afterSideImage && (
+              ) : (
                 <div className="w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <span className="text-gray-400">No after images</span>
+                  <span className="text-gray-400">No image</span>
                 </div>
               )}
               {afterRating !== null && afterRating !== undefined && (
-                <RatingDisplay
-                  ratings={[{ value: afterRating, label: 'After Rating' }]}
-                  size="sm"
-                />
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <RatingDisplay
+                    ratings={[{ value: afterRating, label: 'Overall Rating' }]}
+                    size="sm"
+                  />
+                </div>
               )}
             </div>
           </div>
         </div>
+        {ratingDifference && (
+          <div className={`text-center p-3 rounded-lg font-medium ${
+            Number(ratingDifference) >= 0 
+              ? (Number(ratingDifference) > 0 ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-gray-600') 
+              : 'bg-red-50 text-red-600'
+          }`}>
+            Rating Change: {Number(ratingDifference) > 0 ? '+' : ''}{ratingDifference} points
+          </div>
+        )}
       </div>
     );
   };
@@ -239,35 +244,53 @@ export const PostCard: React.FC<PostCardProps> = ({
       {showActions && (
         <div className="flex items-center gap-4 mt-4 pt-4 border-t">
           <button
-            onClick={() => onReact?.(post.id, 'like')}
-            className={`flex items-center gap-1 ${
-              post.reactions?.some(r => r.type === 'like') ? 'text-pink-600' : 'text-gray-600'
+            onClick={() => handleReaction('like')}
+            className={`flex items-center gap-1 transition-colors ${
+              post.reactions?.some(r => r.type === 'like' && r.user_id === user?.id) 
+                ? 'text-pink-600' 
+                : 'text-gray-600 hover:text-pink-600'
             }`}
           >
-            <Heart className="w-5 h-5" />
+            <Heart className={`w-5 h-5 ${
+              post.reactions?.some(r => r.type === 'like' && r.user_id === user?.id) 
+                ? 'fill-current' 
+                : ''
+            }`} />
             <span>{post.reactions?.filter(r => r.type === 'like').length || 0}</span>
           </button>
           <button
-            onClick={() => onReact?.(post.id, 'helpful')}
-            className={`flex items-center gap-1 ${
-              post.reactions?.some(r => r.type === 'helpful') ? 'text-blue-600' : 'text-gray-600'
+            onClick={() => handleReaction('helpful')}
+            className={`flex items-center gap-1 transition-colors ${
+              post.reactions?.some(r => r.type === 'helpful' && r.user_id === user?.id) 
+                ? 'text-blue-600' 
+                : 'text-gray-600 hover:text-blue-600'
             }`}
           >
-            <ThumbsUp className="w-5 h-5" />
+            <ThumbsUp className={`w-5 h-5 ${
+              post.reactions?.some(r => r.type === 'helpful' && r.user_id === user?.id) 
+                ? 'fill-current' 
+                : ''
+            }`} />
             <span>{post.reactions?.filter(r => r.type === 'helpful').length || 0}</span>
           </button>
           <button
-            onClick={() => onReact?.(post.id, 'insightful')}
-            className={`flex items-center gap-1 ${
-              post.reactions?.some(r => r.type === 'insightful') ? 'text-yellow-600' : 'text-gray-600'
+            onClick={() => handleReaction('insightful')}
+            className={`flex items-center gap-1 transition-colors ${
+              post.reactions?.some(r => r.type === 'insightful' && r.user_id === user?.id) 
+                ? 'text-yellow-600' 
+                : 'text-gray-600 hover:text-yellow-600'
             }`}
           >
-            <Award className="w-5 h-5" />
+            <Award className={`w-5 h-5 ${
+              post.reactions?.some(r => r.type === 'insightful' && r.user_id === user?.id) 
+                ? 'fill-current' 
+                : ''
+            }`} />
             <span>{post.reactions?.filter(r => r.type === 'insightful').length || 0}</span>
           </button>
           <button
-            onClick={() => onComment?.(post.id, '')}
-            className="flex items-center gap-1 text-gray-600 ml-auto"
+            onClick={() => handleComment('')}
+            className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors ml-auto"
           >
             <MessageSquare className="w-5 h-5" />
             <span>{post._count?.comments || 0}</span>

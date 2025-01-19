@@ -39,10 +39,10 @@ export const usePrefetch = () => {
             face_rating, hair_rating, teeth_rating, body_rating, overall_rating
           ),
           before_analysis:analyses!posts_before_analysis_id_fkey (
-            id, front_image_url, analysis_text
+            id, front_image_url, analysis_text, overall_rating
           ),
           after_analysis:analyses!posts_after_analysis_id_fkey (
-            id, front_image_url, analysis_text
+            id, front_image_url, analysis_text, overall_rating
           ),
           comments (
             id, content, created_at,

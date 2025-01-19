@@ -13,7 +13,7 @@ interface UploadModalProps {
   onClose: () => void;
   onUpload: (frontImage: File, sideImage: File) => Promise<void>;
   isLoading?: boolean;
-  error?: string;
+  error?: string | undefined;
 }
 
 const UploadModal: React.FC<UploadModalProps> = React.memo(({ isOpen, onClose, onUpload, isLoading, error }) => {
@@ -28,20 +28,52 @@ const UploadModal: React.FC<UploadModalProps> = React.memo(({ isOpen, onClose, o
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Validate file type and size
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      alert('Please upload a valid image file (JPEG, PNG, or WebP)');
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      alert('Image size must be less than 10MB');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => {
-      setUploadedImages(prev => ({
-        ...prev,
-        [type]: file,
-        [`${type}Preview`]: reader.result as string
-      }));
+      // Validate image dimensions
+      const img = new Image();
+      img.onload = () => {
+        if (img.width < 720 || img.height < 480) {
+          alert('Image resolution must be at least 720x480 pixels');
+          return;
+        }
+        setUploadedImages(prev => ({
+          ...prev,
+          [type]: file,
+          [`${type}Preview`]: reader.result as string
+        }));
+      };
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => {
+      alert('Error reading image file');
     };
     reader.readAsDataURL(file);
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!uploadedImages.front || !uploadedImages.side) return;
-    await onUpload(uploadedImages.front, uploadedImages.side);
+    try {
+      if (!uploadedImages.front || !uploadedImages.side) {
+        throw new Error('Please upload both front and side images');
+      }
+      await onUpload(uploadedImages.front, uploadedImages.side);
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to upload images');
+    }
   }, [uploadedImages.front, uploadedImages.side, onUpload]);
 
   if (!isOpen) return null;
@@ -199,6 +231,7 @@ export const Analysis: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [error, setError] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -223,7 +256,7 @@ export const Analysis: React.FC = () => {
     return data || [];
   }, [user]);
 
-  const { data: analyses, isLoading } = usePrefetchedData<AnalysisType>(
+  const { data: analyses, isLoading: prefetchedLoading } = usePrefetchedData<AnalysisType>(
     'analyses',
     fetchAnalyses,
     30 * 1000 // 30 seconds cache
@@ -268,39 +301,60 @@ export const Analysis: React.FC = () => {
 
       setIsModalOpen(false);
       navigate(`/analysis/${analysis.id}`);
-    } catch (err) {
-      console.error('Error creating analysis:', err);
-      setError('Failed to create analysis. Please try again.');
+    } catch (error) {
+      console.error('Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload images';
+      setError(errorMessage);
     } finally {
       setIsUploading(false);
     }
   }, [user, navigate]);
 
-  const handleShare = useCallback(async (analysisId: string) => {
+  const handleShare = useCallback(async (id: string) => {
     try {
-      const { error: err } = await supabase
-        .from('posts')
-        .insert([{
-          user_id: user?.id,
-          type: 'analysis',
-          analysis_id: analysisId,
-          content: 'Shared my latest analysis'
-        }]);
-
-      if (err) throw err;
       setError(undefined);
-    } catch (err) {
-      console.error('Error sharing analysis:', err);
-      setError('Failed to share analysis');
-    }
-  }, [user]);
+      setIsLoading(true);
+      
+      const { data: shareData, error: shareError } = await supabase
+        .from('analysis_shares')
+        .insert([{ analysis_id: id }])
+        .select()
+        .single();
 
-  const handleViewAnalysis = useCallback((analysisId: string) => {
-    navigate(`/analysis/${analysisId}`);
+      if (shareError) throw shareError;
+      if (!shareData) throw new Error('Failed to generate sharing link');
+
+      const shareUrl = `${window.location.origin}/shared/${shareData.id}`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert('Share link copied to clipboard!');
+    } catch (error) {
+      console.error('Share error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to share analysis';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleView = useCallback((id: string) => {
+    try {
+      navigate(`/analysis/${id}`);
+    } catch (error) {
+      console.error('Navigation error:', error);
+      setError('Failed to view analysis');
+    }
   }, [navigate]);
 
+  // Show error message if present
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(undefined), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const renderContent = useMemo(() => {
-    if (isLoading) {
+    if (prefetchedLoading) {
       return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[1, 2, 3, 4].map((i) => (
@@ -342,12 +396,12 @@ export const Analysis: React.FC = () => {
             key={analysis.id}
             analysis={analysis}
             onShare={handleShare}
-            onView={handleViewAnalysis}
+            onView={handleView}
           />
         ))}
       </div>
     );
-  }, [isLoading, analyses, handleShare, handleViewAnalysis]);
+  }, [prefetchedLoading, analyses, handleShare, handleView]);
 
   return (
     <PageTransition>
@@ -364,8 +418,14 @@ export const Analysis: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 text-red-600 rounded-md" role="alert">
-            {error}
+          <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+            <span className="block sm:inline">{error}</span>
+            <button
+              onClick={() => setError(undefined)}
+              className="absolute top-0 right-0 px-4 py-3"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         )}
 

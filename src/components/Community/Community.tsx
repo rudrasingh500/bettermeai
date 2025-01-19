@@ -8,74 +8,66 @@ import { PageTransition } from '../PageTransition';
 import { Avatar } from '../Avatar';
 import { User, UserPlus, UserCheck, UserX, Search } from 'lucide-react';
 import { PostCard } from '../PostCard';
+import { usePosts as useRankedPosts } from '../../hooks/usePosts';
+import { usePosts as useCommunityPosts } from './hooks/usePosts';
 
 export const Community = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'connections'>('posts');
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [postSearchResults, setPostSearchResults] = useState<Post[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [showChatPopup, setShowChatPopup] = useState<string | null>(null);
 
-  // Define fetch functions
-  const fetchConnections = useCallback(async () => {
-    if (!user?.id) {
-      console.log('No user ID available');
-      return [];
-    }
-    
-    console.log('Fetching connections for user:', user.id);
-    const { data, error } = await supabase
-      .from('connections')
-      .select(`
-        *,
-        user1:profiles!connections_user1_id_fkey (id, username, avatar_url),
-        user2:profiles!connections_user2_id_fkey (id, username, avatar_url)
-      `)
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
-    
-    if (error) {
-      console.error('Error fetching connections:', error);
-      localStorage.removeItem('prefetched_connections');
-      return [];
-    }
-    
-    return data || [];
-  }, [user]);
+  const {
+    posts,
+    isLoading: isLoadingPosts,
+    error: postsError,
+    refetch: refetchPosts
+  } = useRankedPosts(30 * 1000);
 
-  const fetchPosts = useCallback(async () => {
-    const { data } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        profiles (id, username, avatar_url),
-        comments (
-          id,
-          content,
-          created_at,
-          profiles (id, username, avatar_url)
-        ),
-        reactions (id, type, user_id)
-      `)
-      .order('created_at', { ascending: false });
-    return data || [];
-  }, []);
+  const {
+    addReaction,
+    addComment
+  } = useCommunityPosts(user?.id || '');
 
-  // Use enhanced prefetched data hook
-  const { data: connections, isLoading: isLoadingConnections } = usePrefetchedData<Connection>(
+  const {
+    data: connections,
+    isLoading: isLoadingConnections,
+    updateData: updateConnections
+  } = usePrefetchedData<Connection>(
     'connections',
-    fetchConnections,
+    useCallback(async () => {
+      if (!user?.id) {
+        console.log('No user ID available');
+        return [];
+      }
+      
+      console.log('Fetching connections for user:', user.id);
+      const { data, error } = await supabase
+        .from('connections')
+        .select(`
+          *,
+          user1:profiles!connections_user1_id_fkey (id, username, avatar_url),
+          user2:profiles!connections_user2_id_fkey (id, username, avatar_url)
+        `)
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+      
+      if (error) {
+        console.error('Error fetching connections:', error);
+        localStorage.removeItem('prefetched_connections');
+        return [];
+      }
+      
+      return data || [];
+    }, [user]),
     30 * 1000 // 30 seconds cache
-  );
-
-  const { data: posts, isLoading: isLoadingPosts } = usePrefetchedData<Post>(
-    'posts',
-    fetchPosts,
-    30 * 1000
   );
 
   const handleSearch = useCallback(async (query: string) => {
@@ -137,7 +129,7 @@ export const Community = () => {
   useEffect(() => {
     const state = location.state as { activeTab?: string };
     if (state?.activeTab) {
-      setActiveTab(state.activeTab);
+      setActiveTab(state.activeTab as 'posts' | 'connections');
     }
   }, [location]);
 
@@ -168,10 +160,11 @@ export const Community = () => {
 
       if (err) throw err;
       
-      // Clear cache and refresh data
-      localStorage.removeItem('prefetched_connections');
-      await fetchConnections();
-      window.location.reload();
+      // Update local state using the updateData function
+      const updatedConnections = connections.map(conn => 
+        conn.id === connectionId ? { ...conn, status: 'accepted' as const } : conn
+      );
+      updateConnections(updatedConnections);
     } catch (err) {
       console.error('Error accepting connection:', err);
       setError('Failed to accept connection');
@@ -188,10 +181,11 @@ export const Community = () => {
 
       if (err) throw err;
       
-      // Clear cache and refresh data
-      localStorage.removeItem('prefetched_connections');
-      await fetchConnections();
-      window.location.reload();
+      // Update local state using the updateData function
+      const updatedConnections = connections.map(conn => 
+        conn.id === connectionId ? { ...conn, status: 'rejected' as const } : conn
+      );
+      updateConnections(updatedConnections);
     } catch (err) {
       console.error('Error rejecting connection:', err);
       setError('Failed to reject connection');
@@ -208,48 +202,22 @@ export const Community = () => {
       setError(null);
       console.log('Attempting to remove connection:', connectionId);
       
-      // First verify the connection exists and belongs to the user
-      const { data: connection, error: fetchError } = await supabase
-        .from('connections')
-        .select('*')
-        .eq('id', connectionId)
-        .single();
+      const { error: removeError } = await supabase
+        .rpc('remove_connection', {
+          connection_id: connectionId,
+          user_id: user.id
+        });
 
-      if (fetchError) {
-        console.error('Error fetching connection:', fetchError);
-        throw fetchError;
+      if (removeError) {
+        console.error('Error removing connection:', removeError);
+        throw removeError;
       }
 
-      if (!connection) {
-        console.error('Connection not found');
-        throw new Error('Connection not found');
-      }
+      console.log('Successfully removed connection');
 
-      // Verify user owns this connection
-      if (connection.user1_id !== user.id && connection.user2_id !== user.id) {
-        console.error('User does not own this connection');
-        throw new Error('Unauthorized');
-      }
-
-      console.log('Deleting connection:', connection);
-
-      // Delete the connection
-      const { error: deleteError } = await supabase
-        .from('connections')
-        .delete()
-        .eq('id', connectionId);
-
-      if (deleteError) {
-        console.error('Error deleting connection:', deleteError);
-        throw deleteError;
-      }
-
-      console.log('Successfully deleted connection');
-
-      // Clear cache and refresh data
-      localStorage.removeItem('prefetched_connections');
-      await fetchConnections();
-      window.location.reload();
+      // Update local state using the updateData function
+      const updatedConnections = connections.filter(conn => conn.id !== connectionId);
+      updateConnections(updatedConnections);
     } catch (err) {
       console.error('Error in handleRemoveConnection:', err);
       setError(typeof err === 'string' ? err : 'Failed to remove connection');
@@ -264,6 +232,15 @@ export const Community = () => {
 
   const handleCreatePost = () => {
     navigate('/analysis', { state: { createPost: true } });
+  };
+
+  const handleReaction = async (postId: string, type: 'like' | 'helpful' | 'insightful') => {
+    try {
+      await addReaction(postId, type);
+      await refetchPosts();
+    } catch (err) {
+      console.error('Error handling reaction:', err);
+    }
   };
 
   const renderConnectionsList = () => {
@@ -502,16 +479,6 @@ export const Community = () => {
               >
                 Connections
               </button>
-              <button
-                onClick={() => setActiveTab('requests')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'requests'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Requests
-              </button>
             </nav>
           </div>
 
@@ -590,79 +557,27 @@ export const Community = () => {
                   
                   {isLoadingPosts ? (
                     <div className="text-center py-4">Loading posts...</div>
+                  ) : postsError ? (
+                    <div className="text-center py-4 text-red-600">{postsError}</div>
                   ) : posts && posts.length > 0 ? (
-                    posts.map(post => (
-                      <PostCard key={post.id} post={post} />
-                    ))
+                    <div className="space-y-6">
+                      {posts.map(post => (
+                        <PostCard 
+                          key={post.id} 
+                          post={post} 
+                          onUpdate={refetchPosts}
+                          onReact={handleReaction}
+                          onComment={addComment}
+                          showActions={true}
+                        />
+                      ))}
+                    </div>
                   ) : (
                     <div className="text-center py-4 text-gray-500">No posts yet</div>
                   )}
                 </div>
               ) : activeTab === 'connections' ? (
                 renderConnectionsList()
-              ) : activeTab === 'requests' ? (
-                <div className="space-y-6">
-                  {isLoadingConnections ? (
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="animate-pulse flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-                          <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
-                          <div className="flex-1">
-                            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
-                            <div className="h-3 bg-gray-200 rounded w-1/3 mt-2"></div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <h3 className="text-lg font-semibold mb-4">Connection Requests</h3>
-                      <div className="space-y-4">
-                        {connections
-                          .filter(c => c.status === 'pending' && c.user2_id === user?.id)
-                          .map(connection => {
-                            const otherUser = connection.user1;
-                            return (
-                              <div key={connection.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-                                <div className="flex items-center gap-4">
-                                  <Avatar url={otherUser.avatar_url} size={48} username={otherUser.username} />
-                                  <div>
-                                    <div 
-                                      className="font-medium cursor-pointer hover:text-blue-600"
-                                      onClick={() => handleViewProfile(otherUser.username)}
-                                    >
-                                      {otherUser.username}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleAcceptConnection(connection.id)}
-                                    className="p-2 text-green-600 hover:bg-green-50 rounded-full"
-                                    aria-label="Accept connection request"
-                                  >
-                                    <UserCheck className="w-5 h-5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRejectConnection(connection.id)}
-                                    className="p-2 text-red-600 hover:bg-red-50 rounded-full"
-                                    aria-label="Reject connection request"
-                                  >
-                                    <UserX className="w-5 h-5" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        {connections.filter(c => c.status === 'pending' && c.user2_id === user?.id).length === 0 && (
-                          <div className="text-center py-8 text-gray-500">
-                            No pending requests
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
               ) : null}
             </>
           )}

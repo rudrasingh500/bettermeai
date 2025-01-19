@@ -92,6 +92,27 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Function to remove a connection
+create or replace function remove_connection(connection_id uuid, user_id uuid)
+returns void as $$
+begin
+  delete from connections
+  where id = connection_id
+  and (user1_id = user_id or user2_id = user_id)
+  and status = 'accepted';
+end;
+$$ language plpgsql security definer;
+
+-- Add delete policy for connections
+drop policy if exists "Users can delete their own connections" on public.connections;
+
+create policy "Users can delete their own connections"
+  on public.connections for delete
+  using (
+    auth.uid() in (user1_id, user2_id)
+    and status = 'accepted'
+  );
+
 -- Drop existing triggers
 drop trigger if exists handle_connection_change on public.connections;
 drop trigger if exists handle_connections_updated_at on public.connections;
