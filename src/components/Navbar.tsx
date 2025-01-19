@@ -26,7 +26,7 @@ const Navbar = () => {
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2 text-xl font-bold text-gray-900">
               <Camera className="w-6 h-6" />
-              <span className="hidden sm:inline">LooksMaxx AI</span>
+              <span className="hidden sm:inline">BetterMe.ai</span>
               <span className="sm:hidden">AI</span>
             </Link>
           </div>
@@ -85,7 +85,7 @@ const Navbar = () => {
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center gap-2 text-xl font-bold text-gray-900">
             <Camera className="w-6 h-6" />
-            <span className="hidden sm:inline">LooksMaxx AI</span>
+            <span className="hidden sm:inline">BetterMe.ai</span>
             <span className="sm:hidden">AI</span>
           </Link>
           

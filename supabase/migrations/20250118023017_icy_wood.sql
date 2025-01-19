@@ -1,5 +1,5 @@
 /*
-  # Initial Schema Setup for LooksMaxx AI
+  # Initial Schema Setup for BetterMe.ai
 
   1. New Tables
     - `profiles`
