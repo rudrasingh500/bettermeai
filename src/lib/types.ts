@@ -77,6 +77,7 @@ export interface AuthState {
   user: Profile | null;
   isLoading: boolean;
   initialized: boolean;
+  lastRefresh: number;
   signIn: (email: string, password: string) => Promise<Profile>;
   signUp: (email: string, password: string, username: string, gender: Profile['gender']) => Promise<Profile>;
   signOut: () => Promise<void>;

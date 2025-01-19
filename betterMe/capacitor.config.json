@@ -1,0 +1,10 @@
+{
+  "appId": "com.betterme.app",
+  "appName": "BetterMe.ai",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false
+    }
+  }
+}

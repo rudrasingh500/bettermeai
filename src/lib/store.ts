@@ -2,11 +2,19 @@ import { create } from 'zustand';
 import { supabase } from './supabase';
 import type { AuthState, Profile } from './types';
 
+const REFRESH_THRESHOLD = 5 * 60; // 5 minutes in seconds
+
+type AuthError = {
+  message: string;
+  code?: string;
+};
+
 const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: true,
   initialized: false,
-  signIn: async (email: string, password: string) => {
+  lastRefresh: Math.floor(Date.now() / 1000),
+  signIn: async (email: string, password: string): Promise<Profile> => {
     try {
       set({ isLoading: true });
       
@@ -15,14 +23,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
         password,
       });
       
-      if (signInError) {
-        if (signInError.message === 'Invalid login credentials') {
-          throw new Error('Invalid email or password. Please try again.');
-        }
-        throw signInError;
-      }
-      
-      if (!authData.user) throw new Error('No user data returned');
+      if (signInError) throw new Error(signInError.message);
+      if (!authData?.user) throw new Error('No user data returned');
       
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -30,26 +32,17 @@ const useAuthStore = create<AuthState>((set, get) => ({
         .eq('id', authData.user.id)
         .single();
       
-      if (profileError) {
-        console.error('Profile fetch error:', profileError);
+      if (profileError || !profile) {
         await supabase.auth.signOut();
-        throw new Error('Failed to fetch user profile. Please try again.');
+        throw new Error('Failed to fetch user profile');
       }
 
-      if (!profile) {
-        console.error('No profile found for user');
-        await supabase.auth.signOut();
-        throw new Error('User profile not found. Please contact support.');
-      }
-
-      set({ user: profile, isLoading: false });
+      const now = Math.floor(Date.now() / 1000);
+      set({ user: profile, isLoading: false, lastRefresh: now });
       return profile;
     } catch (error) {
       set({ isLoading: false });
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred. Please try again.');
+      throw error instanceof Error ? error : new Error('An unexpected error occurred');
     }
   },
   signUp: async (email: string, password: string, username: string, gender: Profile['gender']) => {
@@ -101,7 +94,9 @@ const useAuthStore = create<AuthState>((set, get) => ({
         throw new Error('Failed to fetch created profile. Please try again.');
       }
 
-      set({ user: profile, isLoading: false });
+      const now = Math.floor(Date.now() / 1000);
+      console.log('Setting isLoading to false.');
+      set({ user: profile, isLoading: false, lastRefresh: now });
       return profile;
     } catch (error) {
       set({ isLoading: false });
@@ -116,104 +111,126 @@ const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: true });
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      set({ user: null, isLoading: false });
+      const now = Math.floor(Date.now() / 1000);
+      set({ user: null, isLoading: false, lastRefresh: now });
     } catch (error) {
       set({ isLoading: false });
       throw error;
     }
   },
   refreshSession: async () => {
+    console.log('refreshSession function called.');
     if (!get().initialized) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const timeSinceLastRefresh = now - get().lastRefresh;
+    
+    if (timeSinceLastRefresh < REFRESH_THRESHOLD) {
+      console.log('Session was refreshed recently, skipping refresh');
+      return;
+    }
     
     try {
       set({ isLoading: true });
-      
+      console.log('Proceeding with session refresh...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
         console.error('Session refresh error:', sessionError);
-        set({ user: null, isLoading: false });
+        set({ user: null, isLoading: false, lastRefresh: now });
         return;
       }
       
       if (!session?.user) {
-        set({ user: null, isLoading: false });
+        console.log('No user session found during refresh.');
+        set({ user: null, isLoading: false, lastRefresh: now });
         return;
       }
-      
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      
-      if (profileError) {
-        // Instead of logging the error and setting user to null,
-        // we'll keep the existing user data if available
-        console.warn('Profile refresh warning:', profileError);
-        set({ isLoading: false });
-        return;
+
+      if (!get().user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profileError || !profile) {
+          console.warn('Profile fetch error:', profileError);
+          set({ isLoading: false, lastRefresh: now });
+          return;
+        }
+        
+        set({ user: profile, isLoading: false, lastRefresh: now });
+      } else {
+        set({ isLoading: false, lastRefresh: now });
       }
-      
-      if (!profile) {
-        console.warn('No profile found during refresh');
-        set({ isLoading: false });
-        return;
-      }
-      
-      set({ user: profile, isLoading: false });
     } catch (error) {
       console.warn('Error refreshing session:', error);
-      // Don't clear the user on refresh errors
-      set({ isLoading: false });
+      set({ isLoading: false, lastRefresh: now });
     }
   }
 }));
 
 // Initialize auth state
 const initializeAuth = async () => {
+  if (useAuthStore.getState().initialized) return;
+  
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const now = Math.floor(Date.now() / 1000);
     
     if (sessionError) {
       console.error('Session initialization error:', sessionError);
-      useAuthStore.setState({ user: null, isLoading: false, initialized: true });
+      useAuthStore.setState({ user: null, isLoading: false, initialized: true, lastRefresh: now });
       return;
     }
 
-    if (session?.user) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      
-      if (profileError) {
-        console.warn('Profile initialization warning:', profileError);
-        useAuthStore.setState({ isLoading: false, initialized: true });
-        return;
-      }
-
-      if (!profile) {
-        console.warn('No profile found during initialization');
-        useAuthStore.setState({ isLoading: false, initialized: true });
-        return;
-      }
-
-      useAuthStore.setState({ user: profile, isLoading: false, initialized: true });
-    } else {
-      useAuthStore.setState({ user: null, isLoading: false, initialized: true });
+    if (!session?.user) {
+      useAuthStore.setState({ user: null, isLoading: false, initialized: true, lastRefresh: now });
+      return;
     }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+    
+    if (profileError || !profile) {
+      console.warn('Profile initialization warning:', profileError);
+      useAuthStore.setState({ user: null, isLoading: false, initialized: true, lastRefresh: now });
+      return;
+    }
+
+    useAuthStore.setState({ 
+      user: profile, 
+      isLoading: false, 
+      initialized: true, 
+      lastRefresh: now 
+    });
   } catch (error) {
     console.warn('Error initializing auth:', error);
-    useAuthStore.setState({ isLoading: false, initialized: true });
+    useAuthStore.setState({ 
+      user: null, 
+      isLoading: false, 
+      initialized: true, 
+      lastRefresh: Math.floor(Date.now() / 1000) 
+    });
   }
 };
 
 // Handle visibility change
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && useAuthStore.getState().initialized) {
-    useAuthStore.getState().refreshSession();
+    const { user, lastRefresh } = useAuthStore.getState();
+    const now = Math.floor(Date.now() / 1000);
+    
+    if (user && (now - lastRefresh) >= REFRESH_THRESHOLD) {
+      console.log('Session needs refresh, refreshing...');
+      useAuthStore.getState().refreshSession();
+    } else {
+      console.log('Session still valid or no user, skipping refresh');
+    }
   }
 });
 
@@ -221,8 +238,9 @@ document.addEventListener('visibilitychange', () => {
 supabase.auth.onAuthStateChange(async (event, session) => {
   if (!useAuthStore.getState().initialized) return;
 
+  const now = Math.floor(Date.now() / 1000);
   if (event === 'SIGNED_OUT') {
-    useAuthStore.setState({ user: null, isLoading: false });
+    useAuthStore.setState({ user: null, isLoading: false, lastRefresh: now });
     return;
   }
 

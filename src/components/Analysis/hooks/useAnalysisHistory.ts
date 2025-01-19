@@ -74,7 +74,7 @@ export const useAnalysisHistory = (userId: string) => {
     };
   }, [userId, fetchAnalyses]);
 
-  // Subscribe to realtime changes
+  // Subscribe to realtime changes and visibility changes
   useEffect(() => {
     if (!userId) return;
 
@@ -94,8 +94,20 @@ export const useAnalysisHistory = (userId: string) => {
       )
       .subscribe();
 
+    // Add visibility change handler
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Analysis history: Tab is visible, refreshing data...');
+        fetchAnalyses();
+      }
+    };
+
+    // Add visibility change listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [userId, fetchAnalyses]);
 

@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, History, Loader2, MessageSquare, Heart, Award, ThumbsUp, Camera } from 'lucide-react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { RatingDisplay } from './Analysis/RatingDisplay';
+import { PostCard } from './PostCard';
 import type { Analysis, Post } from '../lib/types';
 
 const Profile = () => {
@@ -16,103 +17,115 @@ const Profile = () => {
   const [error, setError] = useState<string | null>(null);
   const [latestRating, setLatestRating] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'analyses' | 'posts'>('analyses');
-  const [isLoading2, setIsLoading2] = useState(true);
+  const [isLoading2, setIsLoading2] = useState(false);
+  const isFetchingRef = useRef(false);
 
-  useEffect(() => {
-    if (initialized && !isLoading && !user) {
-      navigate('/login');
-    }
-  }, [user, isLoading, initialized, navigate]);
-
-  useEffect(() => {
-    if (user) {
-      setUsername(user.username);
-      fetchData();
-    }
-  }, [user]);
-
-  const fetchData = async () => {
-    setIsLoading2(true);
-    try {
-      await Promise.all([
-        fetchAnalyses(),
-        fetchPosts()
-      ]);
-    } finally {
-      setIsLoading2(false);
-    }
-  };
-
-  const fetchAnalyses = async () => {
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('analyses')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching analyses:', error);
-      return;
-    }
-
-    setAnalyses(data || []);
-    
-    if (data && data.length > 0) {
-      setLatestRating(data[0].overall_rating);
-    }
-  };
-
-  const fetchPosts = async () => {
-    if (!user) return;
+  const fetchData = useCallback(async () => {
+    if (!user || isFetchingRef.current) return;
 
     try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          analyses (
-            id,
-            front_image_url,
-            left_side_image_url,
-            analysis_text
-          ),
-          comments (
-            id,
-            content,
-            created_at,
-            profiles (
+      isFetchingRef.current = true;
+      console.log('Profile: Starting data fetch for user:', user.id);
+
+      const [analysesResult, postsResult] = await Promise.all([
+        supabase
+          .from('analyses')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('posts')
+          .select(`
+            *,
+            analyses!posts_analysis_id_fkey (
               id,
-              username
+              front_image_url,
+              left_side_image_url,
+              analysis_text
+            ),
+            comments (
+              id,
+              content,
+              created_at,
+              profiles (
+                id,
+                username
+              )
+            ),
+            reactions (
+              id,
+              type,
+              user_id
             )
-          ),
-          reactions (
-            id,
-            type,
-            user_id
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+      ]);
 
-      if (error) throw error;
+      if (analysesResult.error) throw analysesResult.error;
+      if (postsResult.error) throw postsResult.error;
 
-      // Add computed counts
-      const postsWithCounts = (data || []).map(post => ({
+      setAnalyses(analysesResult.data || []);
+      if (analysesResult.data && analysesResult.data.length > 0) {
+        setLatestRating(analysesResult.data[0].overall_rating);
+      }
+
+      const postsWithCounts = (postsResult.data || []).map(post => ({
         ...post,
         _count: {
           comments: post.comments?.length || 0,
           reactions: post.reactions?.length || 0
         }
       }));
-
       setPosts(postsWithCounts);
+      console.log('Profile: All data updated successfully');
+      
     } catch (err) {
-      console.error('Error fetching posts:', err);
-      setError('Failed to load posts');
+      console.error('Profile: Error fetching data:', err);
+      setError('Failed to load data');
+    } finally {
+      isFetchingRef.current = false;
+      setIsLoading2(false);
     }
-  };
+  }, [user]);
+
+  // Initial data load and auth state handling
+  useEffect(() => {
+    if (initialized && !isLoading && !user) {
+      navigate('/login');
+    } else if (user && !isLoading) {
+      setUsername(user.username);
+      setIsLoading2(true);
+      fetchData();
+    }
+  }, [user, isLoading, initialized, navigate, fetchData]);
+
+  // Handle visibility changes
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Clear any existing timeout
+        if (timeoutId) clearTimeout(timeoutId);
+        
+        // Wait a short moment for the session refresh to complete
+        timeoutId = setTimeout(() => {
+          console.log('Profile: Tab visible, fetching fresh data...');
+          isFetchingRef.current = false;
+          fetchData();
+        }, 100);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [user, fetchData]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -239,104 +252,6 @@ const Profile = () => {
             </div>
           </div>
         )}
-      </div>
-    );
-  };
-
-  const renderPostCard = (post: Post) => {
-    const renderAnalysisPost = () => {
-      if (!post.analyses) return null;
-      const analysis = JSON.parse(post.analyses.analysis_text || '{}');
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <img
-              src={post.analyses.front_image_url || ''}
-              alt="Front view"
-              className="w-full h-48 object-cover rounded-lg"
-              loading="lazy"
-            />
-            <img
-              src={post.analyses.left_side_image_url || ''}
-              alt="Side view"
-              className="w-full h-48 object-cover rounded-lg"
-              loading="lazy"
-            />
-          </div>
-          <RatingDisplay
-            ratings={[
-              { value: analysis.ratings.overall_rating, label: 'Overall Rating' },
-              { value: analysis.ratings.face_rating, label: 'Face Rating' },
-              { value: analysis.ratings.hair_rating, label: 'Hair Rating' }
-            ]}
-            size="sm"
-          />
-        </div>
-      );
-    };
-
-    const renderBeforeAfterPost = () => (
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Before</h4>
-          <img
-            src={post.before_image_url || ''}
-            alt="Before"
-            className="w-full h-48 object-cover rounded-lg"
-            loading="lazy"
-          />
-        </div>
-        <div>
-          <h4 className="text-sm font-medium text-gray-700 mb-2">After</h4>
-          <img
-            src={post.after_image_url || ''}
-            alt="After"
-            className="w-full h-48 object-cover rounded-lg"
-            loading="lazy"
-          />
-        </div>
-      </div>
-    );
-
-    return (
-      <div key={post.id} className="bg-white rounded-lg shadow-sm p-4 md:p-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <p className="text-sm text-gray-500">
-              {new Date(post.created_at).toLocaleDateString()}
-            </p>
-          </div>
-          <div className="text-sm text-gray-500">
-            {post.type === 'analysis' ? 'Analysis Share' : 'Progress Update'}
-          </div>
-        </div>
-
-        {post.content && (
-          <p className="text-gray-700 mb-4">{post.content}</p>
-        )}
-
-        {post.type === 'analysis'
-          ? renderAnalysisPost()
-          : renderBeforeAfterPost()}
-
-        <div className="flex items-center gap-4 mt-4 pt-4 border-t">
-          <div className="flex items-center gap-1 text-gray-600">
-            <Heart className="w-5 h-5" />
-            <span>{post.reactions?.filter(r => r.type === 'like').length || 0}</span>
-          </div>
-          <div className="flex items-center gap-1 text-gray-600">
-            <ThumbsUp className="w-5 h-5" />
-            <span>{post.reactions?.filter(r => r.type === 'helpful').length || 0}</span>
-          </div>
-          <div className="flex items-center gap-1 text-gray-600">
-            <Award className="w-5 h-5" />
-            <span>{post.reactions?.filter(r => r.type === 'insightful').length || 0}</span>
-          </div>
-          <div className="flex items-center gap-1 text-gray-600 ml-auto">
-            <MessageSquare className="w-5 h-5" />
-            <span>{post._count?.comments || 0}</span>
-          </div>
-        </div>
       </div>
     );
   };
@@ -477,7 +392,13 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {posts.map(renderPostCard)}
+                  {posts.map(post => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      showActions={false}
+                    />
+                  ))}
                 </div>
               )}
             </>
