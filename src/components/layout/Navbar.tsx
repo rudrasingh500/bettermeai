@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Camera, Users, User, LogOut, Settings } from 'lucide-react';
-import { useAuthStore } from '../lib/store';
-import { NotificationsPopover } from './NotificationsPopover';
+import { useAuthStore } from '../../lib/store';
+import { NotificationsPopover } from '../shared/NotificationsPopover';
 
-const Navbar = () => {
+export const Navbar = () => {
   const { user, signOut } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -179,5 +179,3 @@ const Navbar = () => {
     </>
   );
 };
-
-export default Navbar;

@@ -194,38 +194,37 @@ const Community = () => {
             />
           ) : (
             <div className="space-y-6">
-              {/* My Connections */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <h2 className="text-lg font-semibold mb-4">My Connections</h2>
-                <div className="space-y-4">
-                  {myConnections.length === 0 ? (
-                    <p className="text-gray-500">No connections yet</p>
-                  ) : (
-                    myConnections.map(({ profile, status, outgoing }) => (
-                      <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
-                            {profile.avatar_url ? (
-                              <img 
-                                src={profile.avatar_url} 
-                                alt={profile.username}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <User className="w-full h-full p-2 text-gray-400" />
-                            )}
-                          </div>
-                          <div>
-                            <div 
-                              onClick={() => handleProfileClick(profile.username)}
-                              className="cursor-pointer hover:text-blue-600"
-                            >
-                              {profile.username}
+              {/* Pending Requests */}
+              {myConnections.filter(conn => conn.status === 'pending' && !conn.outgoing).length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm p-4">
+                  <h2 className="text-lg font-semibold mb-4">Pending Requests</h2>
+                  <div className="space-y-4">
+                    {myConnections
+                      .filter(conn => conn.status === 'pending' && !conn.outgoing)
+                      .map(({ profile }) => (
+                        <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                              {profile.avatar_url ? (
+                                <img 
+                                  src={profile.avatar_url} 
+                                  alt={profile.username}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-full h-full p-2 text-gray-400" />
+                              )}
                             </div>
-                            <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                            <div>
+                              <div 
+                                onClick={() => handleProfileClick(profile.username)}
+                                className="cursor-pointer hover:text-blue-600"
+                              >
+                                {profile.username}
+                              </div>
+                              <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                            </div>
                           </div>
-                        </div>
-                        {status === 'pending' && !outgoing && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => updateConnectionStatus(profile.id, 'accepted')}
@@ -240,20 +239,91 @@ const Community = () => {
                               Reject
                             </button>
                           </div>
-                        )}
-                        {status === 'pending' && outgoing && (
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sent Requests */}
+              {myConnections.filter(conn => conn.status === 'pending' && conn.outgoing).length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm p-4">
+                  <h2 className="text-lg font-semibold mb-4">Sent Requests</h2>
+                  <div className="space-y-4">
+                    {myConnections
+                      .filter(conn => conn.status === 'pending' && conn.outgoing)
+                      .map(({ profile }) => (
+                        <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                              {profile.avatar_url ? (
+                                <img 
+                                  src={profile.avatar_url} 
+                                  alt={profile.username}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-full h-full p-2 text-gray-400" />
+                              )}
+                            </div>
+                            <div>
+                              <div 
+                                onClick={() => handleProfileClick(profile.username)}
+                                className="cursor-pointer hover:text-blue-600"
+                              >
+                                {profile.username}
+                              </div>
+                              <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                            </div>
+                          </div>
                           <span className="text-sm text-gray-500">Pending</span>
-                        )}
-                        {status === 'accepted' && (
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* My Connections */}
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <h2 className="text-lg font-semibold mb-4">My Connections</h2>
+                <div className="space-y-4">
+                  {myConnections.filter(conn => conn.status === 'accepted').length === 0 ? (
+                    <p className="text-gray-500">No connections yet</p>
+                  ) : (
+                    myConnections
+                      .filter(conn => conn.status === 'accepted')
+                      .map(({ profile }) => (
+                        <div key={profile.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden">
+                              {profile.avatar_url ? (
+                                <img 
+                                  src={profile.avatar_url} 
+                                  alt={profile.username}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <User className="w-full h-full p-2 text-gray-400" />
+                              )}
+                            </div>
+                            <div>
+                              <div 
+                                onClick={() => handleProfileClick(profile.username)}
+                                className="cursor-pointer hover:text-blue-600"
+                              >
+                                {profile.username}
+                              </div>
+                              <p className="text-sm text-gray-500">Rating: {profile.rating?.toFixed(1) || 'N/A'}</p>
+                            </div>
+                          </div>
                           <button
                             onClick={() => setShowChatPopup(profile.username)}
                             className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                           >
                             Message
                           </button>
-                        )}
-                      </div>
-                    ))
+                        </div>
+                      ))
                   )}
                 </div>
               </div>

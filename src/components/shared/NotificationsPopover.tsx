@@ -1,8 +1,8 @@
 import React from 'react';
 import { Bell, Check, X, Loader2, UserCheck } from 'lucide-react';
-import { useNotifications } from '../hooks';
-import { useAuthStore } from '../lib/store';
-import { useConnections } from '../hooks';
+import { useNotifications } from '../../hooks/useNotifications';
+import { useAuthStore } from '../../lib/store';
+import { useConnections } from '../../hooks/useConnections';
 import { useNavigate } from 'react-router-dom';
 
 interface BaseNotification {

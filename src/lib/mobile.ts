@@ -10,6 +10,7 @@ import { Preferences } from '@capacitor/preferences';
 export class MobileService {
   private static instance: MobileService;
   private initialized = false;
+  private memoryCache: Map<string, { data: any; timestamp: number }> = new Map();
 
   private constructor() {}
 
@@ -33,6 +34,10 @@ export class MobileService {
     // Add app lifecycle listeners
     App.addListener('appStateChange', ({ isActive }) => {
       console.log('App state changed. Is active?:', isActive);
+      // Clear memory cache when app goes to background
+      if (!isActive) {
+        this.memoryCache.clear();
+      }
     });
 
     this.initialized = true;
@@ -130,21 +135,53 @@ export class MobileService {
     }
   }
 
-  async storeData(key: string, value: string) {
-    if (!this.isNativePlatform()) return;
-
+  async storeData(key: string, value: string, useMemoryCache = true) {
     try {
-      await Preferences.set({ key, value });
+      if (useMemoryCache) {
+        this.memoryCache.set(key, {
+          data: value,
+          timestamp: Date.now(),
+        });
+      }
+      
+      if (this.isNativePlatform()) {
+        await Preferences.set({ key, value });
+      } else {
+        localStorage.setItem(key, value);
+      }
     } catch (error) {
       console.error('Error storing data:', error);
     }
   }
 
-  async getData(key: string): Promise<string | null> {
-    if (!this.isNativePlatform()) return null;
-
+  async getData(key: string, maxAge?: number): Promise<string | null> {
     try {
-      const { value } = await Preferences.get({ key });
+      // Check memory cache first
+      const cached = this.memoryCache.get(key);
+      if (cached) {
+        if (!maxAge || Date.now() - cached.timestamp < maxAge) {
+          return cached.data;
+        }
+        this.memoryCache.delete(key);
+      }
+
+      // Try persistent storage
+      let value: string | null = null;
+      if (this.isNativePlatform()) {
+        const result = await Preferences.get({ key });
+        value = result.value;
+      } else {
+        value = localStorage.getItem(key);
+      }
+
+      // Update memory cache if value exists
+      if (value) {
+        this.memoryCache.set(key, {
+          data: value,
+          timestamp: Date.now(),
+        });
+      }
+
       return value;
     } catch (error) {
       console.error('Error getting data:', error);
@@ -153,13 +190,21 @@ export class MobileService {
   }
 
   async removeData(key: string) {
-    if (!this.isNativePlatform()) return;
-
     try {
-      await Preferences.remove({ key });
+      this.memoryCache.delete(key);
+      
+      if (this.isNativePlatform()) {
+        await Preferences.remove({ key });
+      } else {
+        localStorage.removeItem(key);
+      }
     } catch (error) {
       console.error('Error removing data:', error);
     }
+  }
+
+  async clearCache() {
+    this.memoryCache.clear();
   }
 }
 

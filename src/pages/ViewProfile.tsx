@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Profile as ProfileType } from '../lib/types';
-import { Profile } from '../components/Profile/Profile';
+import { ProfileView } from '../components/Profile/ProfileView';
 import { useAuthStore } from '../lib/store';
 
 export const ViewProfile = () => {
@@ -60,7 +60,7 @@ export const ViewProfile = () => {
   }
 
   return (
-    <Profile 
+    <ProfileView 
       profile={profile} 
       isOwnProfile={user?.id === profile.id}
     />

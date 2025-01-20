@@ -1,5 +1,5 @@
 import React from 'react';
-import { PostCard } from '../PostCard';
+import { PostCard } from '../PostCard/PostCard';
 import type { Post, Profile } from '../../lib/types';
 
 interface FeedProps {

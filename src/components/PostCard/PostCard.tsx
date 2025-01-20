@@ -1,7 +1,7 @@
 import React from 'react';
 import { MessageSquare, Heart, Award, ThumbsUp, User } from 'lucide-react';
 import { RatingDisplay } from '../Analysis/RatingDisplay';
-import type { Post } from '../../lib/types';
+import type { Post, Comment, Profile } from '../../lib/types';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
 
@@ -14,7 +14,7 @@ interface PostCardProps {
 }
 
 export const PostCard: React.FC<PostCardProps> = ({
-  post,
+  post: initialPost,
   onComment,
   onReact,
   showActions = true,
@@ -22,9 +22,23 @@ export const PostCard: React.FC<PostCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const [showCommentInput, setShowCommentInput] = React.useState(false);
+  const [commentText, setCommentText] = React.useState('');
+  const [post, setPost] = React.useState(initialPost);
+
+  // Update post when initialPost changes
+  React.useEffect(() => {
+    setPost(initialPost);
+  }, [initialPost]);
 
   const handleProfileClick = (username: string) => {
-    navigate(`/profile/${username}`, { state: { from: location.pathname } });
+    // If it's the current user's profile, navigate to /profile
+    if (user?.username === username) {
+      navigate('/profile');
+    } else {
+      // For other users, navigate to their profile page
+      navigate(`/profile/${username}`, { state: { from: location.pathname } });
+    }
   };
 
   const handleReaction = async (type: 'like' | 'helpful' | 'insightful') => {
@@ -42,14 +56,38 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const handleComment = async (content: string) => {
     try {
-      if (onComment) {
+      if (onComment && user) {
+        // Optimistically add the comment to the UI
+        const tempComment: Comment = {
+          id: Date.now().toString(), // Temporary ID
+          content,
+          created_at: new Date().toISOString(),
+          user_id: user.id,
+          post_id: post.id,
+          profiles: {
+            id: user.id,
+            username: user.username || '',
+            avatar_url: user.avatar_url,
+            gender: 'other',
+            bio: '',
+            rating: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        };
+
+        setPost(prevPost => ({
+          ...prevPost,
+          comments: [...(prevPost.comments || []), tempComment]
+        }));
+
+        // Actually send the comment to the server
         await onComment(post.id, content);
-        if (onUpdate) {
-          await onUpdate();
-        }
       }
     } catch (err) {
       console.error('Error posting comment:', err);
+      // Revert the optimistic update on error
+      setPost(initialPost);
     }
   };
 
@@ -289,11 +327,42 @@ export const PostCard: React.FC<PostCardProps> = ({
             <span>{post.reactions?.filter(r => r.type === 'insightful').length || 0}</span>
           </button>
           <button
-            onClick={() => handleComment('')}
+            onClick={() => setShowCommentInput(!showCommentInput)}
             className="flex items-center gap-1 text-gray-600 hover:text-blue-600 transition-colors ml-auto"
           >
             <MessageSquare className="w-5 h-5" />
-            <span>{post._count?.comments || 0}</span>
+            <span>{post.comments?.length || 0}</span>
+          </button>
+        </div>
+      )}
+
+      {showCommentInput && (
+        <div className="mt-4 flex gap-2">
+          <input
+            type="text"
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
+            placeholder="Write a comment..."
+            className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && commentText.trim()) {
+                handleComment(commentText);
+                setCommentText('');
+                setShowCommentInput(false);
+              }
+            }}
+          />
+          <button
+            onClick={() => {
+              if (commentText.trim()) {
+                handleComment(commentText);
+                setCommentText('');
+                setShowCommentInput(false);
+              }
+            }}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Post
           </button>
         </div>
       )}

@@ -4,10 +4,10 @@ import { User, History, Loader2, MessageSquare, Heart, Award, ThumbsUp, Camera }
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import { RatingDisplay } from './Analysis/RatingDisplay';
-import { PostCard } from './PostCard';
+import { PostCard } from './PostCard/PostCard';
 import type { Analysis, Post } from '../lib/types';
 
-const Profile = () => {
+export const UserProfile = () => {
   const { user, isLoading, initialized } = useAuthStore();
   const navigate = useNavigate();
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
@@ -552,5 +552,3 @@ const Profile = () => {
     </div>
   );
 };
-
-export default Profile;

@@ -4,7 +4,7 @@ import { Analysis as AnalysisType } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useNavigate } from 'react-router-dom';
-import { PageTransition } from '../PageTransition';
+import { PageTransition } from '../layout/PageTransition';
 import { Camera, Share2, ChevronRight, Upload, X } from 'lucide-react';
 import { RatingDisplay } from './RatingDisplay';
 

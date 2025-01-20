@@ -1,15 +1,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { usePrefetchedData } from '../../hooks/usePrefetchedData';
-import { Connection, Profile, Post } from '../../lib/types';
+import { Connection, Profile, Post, Analysis } from '../../lib/types';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { PageTransition } from '../PageTransition';
-import { Avatar } from '../Avatar';
+import { PageTransition } from '../layout/PageTransition';
+import { Avatar } from '../shared/Avatar';
 import { User, UserPlus, UserCheck, UserX, Search } from 'lucide-react';
-import { PostCard } from '../PostCard';
+import { PostCard } from '../PostCard/PostCard';
 import { usePosts as useRankedPosts } from '../../hooks/usePosts';
 import { usePosts as useCommunityPosts } from './hooks/usePosts';
+import { CreatePost } from './CreatePost';
 
 export const Community = () => {
   const { user } = useAuthStore();
@@ -24,6 +25,7 @@ export const Community = () => {
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [showChatPopup, setShowChatPopup] = useState<string | null>(null);
+  const [analyses, setAnalyses] = useState<Analysis[]>([]);
 
   const {
     posts,
@@ -89,8 +91,7 @@ export const Community = () => {
       if (profileError) throw profileError;
       setSearchResults(profiles || []);
 
-      // Search posts by content or by users found in the search
-      const userIds = profiles?.map(p => p.id) || [];
+      // Search posts with complete data including analyses
       const { data: posts, error: postError } = await supabase
         .from('posts')
         .select(`
@@ -102,9 +103,18 @@ export const Community = () => {
             created_at,
             profiles (id, username, avatar_url)
           ),
-          reactions (id, type, user_id)
+          reactions (id, type, user_id),
+          analyses!posts_analysis_id_fkey (
+            id, front_image_url, left_side_image_url, analysis_text
+          ),
+          before_analysis:analyses!posts_before_analysis_id_fkey (
+            id, front_image_url, analysis_text, overall_rating
+          ),
+          after_analysis:analyses!posts_after_analysis_id_fkey (
+            id, front_image_url, analysis_text, overall_rating
+          )
         `)
-        .or(`content.ilike.%${query}%,user_id.in.(${userIds.join(',')})`)
+        .or(`content.ilike.%${query}%,user_id.in.(${profiles?.map(p => p.id).join(',') || ''})`)
         .order('created_at', { ascending: false })
         .limit(10);
 
@@ -112,6 +122,7 @@ export const Community = () => {
       setPostSearchResults(posts || []);
     } catch (error) {
       console.error('Error searching:', error);
+      setError('Failed to search');
     } finally {
       setIsSearching(false);
     }
@@ -230,8 +241,21 @@ export const Community = () => {
     navigate(`/profile/${username}`);
   };
 
-  const handleCreatePost = () => {
-    navigate('/analysis', { state: { createPost: true } });
+  const handleCreatePost = async (data: {
+    type: 'analysis' | 'before_after';
+    analysisId?: string;
+    beforeAnalysisId?: string;
+    afterAnalysisId?: string;
+    content: string;
+  }) => {
+    try {
+      await createPost(data);
+      setShowCreatePost(false);
+      await refetchPosts();
+    } catch (error) {
+      console.error('Error creating post:', error);
+      setError('Failed to create post');
+    }
   };
 
   const handleReaction = async (postId: string, type: 'like' | 'helpful' | 'insightful') => {
@@ -465,6 +489,56 @@ export const Community = () => {
     );
   };
 
+  // Fetch analyses when component mounts
+  useEffect(() => {
+    const fetchAnalyses = async () => {
+      if (!user?.id) return;
+      
+      const { data, error } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error('Error fetching analyses:', error);
+        return;
+      }
+      
+      setAnalyses(data || []);
+    };
+
+    fetchAnalyses();
+  }, [user?.id]);
+
+  const createPost = async (data: {
+    type: 'analysis' | 'before_after';
+    analysisId?: string;
+    beforeAnalysisId?: string;
+    afterAnalysisId?: string;
+    content: string;
+  }) => {
+    if (!user?.id) return;
+
+    try {
+      const { error: postError } = await supabase
+        .from('posts')
+        .insert([{
+          user_id: user.id,
+          type: data.type,
+          analysis_id: data.analysisId,
+          before_analysis_id: data.beforeAnalysisId,
+          after_analysis_id: data.afterAnalysisId,
+          content: data.content
+        }]);
+
+      if (postError) throw postError;
+    } catch (error) {
+      console.error('Error creating post:', error);
+      throw error;
+    }
+  };
+
   return (
     <PageTransition>
       <div className="max-w-4xl mx-auto p-4">
@@ -555,7 +629,14 @@ export const Community = () => {
                 ) : postSearchResults.length > 0 ? (
                   <div className="space-y-4">
                     {postSearchResults.map(post => (
-                      <PostCard key={post.id} post={post} />
+                      <PostCard 
+                        key={post.id} 
+                        post={post}
+                        onUpdate={refetchPosts}
+                        onReact={handleReaction}
+                        onComment={addComment}
+                        showActions={true}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -573,7 +654,7 @@ export const Community = () => {
                   {/* Create Post Button */}
                   <div className="flex justify-end">
                     <button
-                      onClick={handleCreatePost}
+                      onClick={() => setShowCreatePost(true)}
                       className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       Create Post
@@ -605,6 +686,45 @@ export const Community = () => {
                 renderConnectionsList()
               ) : null}
             </>
+          )}
+
+          {/* Create Post Modal */}
+          {showCreatePost && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Create Post</h3>
+                  <button
+                    onClick={() => setShowCreatePost(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Close
+                  </button>
+                </div>
+                <CreatePost
+                  analyses={analyses}
+                  onSubmit={handleCreatePost}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Chat Popup */}
+          {showChatPopup && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Chat with {showChatPopup}</h3>
+                  <button
+                    onClick={() => setShowChatPopup(null)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Close
+                  </button>
+                </div>
+                <p className="text-gray-600">Chat functionality coming soon!</p>
+              </div>
+            </div>
           )}
         </div>
       </div>

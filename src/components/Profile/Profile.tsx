@@ -2,19 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 import { Profile as ProfileType } from '../../lib/types';
-import { Avatar } from '../../components/Avatar';
+import { Avatar } from '../shared/Avatar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { PostCard } from '../PostCard';
-import { PostSkeleton } from '../PostSkeleton';
-import { PageTransition } from '../PageTransition';
+import { PostCard } from '../PostCard/PostCard';
+import { PostSkeleton } from '../shared/PostSkeleton';
+import { PageTransition } from '../layout/PageTransition';
 
-interface ProfileProps {
+interface ProfileViewProps {
   profile: ProfileType;
   isOwnProfile?: boolean;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ profile, isOwnProfile = false }) => {
+export const ProfileView: React.FC<ProfileViewProps> = ({ profile, isOwnProfile = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [bio, setBio] = useState(profile.bio || '');
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +68,9 @@ export const Profile: React.FC<ProfileProps> = ({ profile, isOwnProfile = false 
               id, front_image_url, analysis_text, overall_rating
             ),
             comments (
-              id, content, created_at,
+              id,
+              content,
+              created_at,
               profiles (id, username, avatar_url)
             ),
             reactions (id, type, user_id)
@@ -78,17 +80,10 @@ export const Profile: React.FC<ProfileProps> = ({ profile, isOwnProfile = false 
 
         if (error) throw error;
 
-        const postsWithCounts = (data || []).map(post => ({
-          ...post,
-          _count: {
-            comments: post.comments?.length || 0,
-            reactions: post.reactions?.length || 0
-          }
-        }));
-
-        setPosts(postsWithCounts);
+        setPosts(data || []);
       } catch (err) {
         console.error('Error fetching posts:', err);
+        setError('Failed to load posts');
       } finally {
         setIsLoadingPosts(false);
       }
