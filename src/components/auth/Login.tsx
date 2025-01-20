@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useAuthStore } from '../lib/store';
-import type { Profile } from '../lib/types';
+import { useAuthStore } from '../../lib/store';
+import type { Profile } from '../../lib/types';
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(''); 
   const [username, setUsername] = useState('');
   const [gender, setGender] = useState<Profile['gender']>('male');
   const [error, setError] = useState<string | null>(null);
