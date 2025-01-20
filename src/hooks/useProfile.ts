@@ -2,6 +2,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAuthStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
 import type { Analysis, Post, Profile } from '../lib/types';
+import { useContentModeration } from '../lib/contentModeration';
+import { toast } from 'react-hot-toast';
 
 interface UseProfileOptions {
   profileId?: string;
@@ -19,6 +21,7 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
   const [connectionStatus, setConnectionStatus] = useState<'none' | 'pending' | 'accepted'>('none');
   const [latestRating, setLatestRating] = useState<number | null>(null);
   const isFetchingRef = useRef(false);
+  const { checkContent } = useContentModeration();
 
   const targetId = isOwnProfile ? user?.id : profileId;
 
@@ -29,7 +32,7 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
       isFetchingRef.current = true;
       setIsLoading(true);
 
-      const [analysesResult, postsResult] = await Promise.all([
+      const [analysesResult, postsResult, profileResult] = await Promise.all([
         supabase
           .from('analyses')
           .select('*')
@@ -75,11 +78,17 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
             )
           `)
           .eq('user_id', targetId)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('bio')
+          .eq('id', targetId)
+          .single()
       ]);
 
       if (analysesResult.error) throw analysesResult.error;
       if (postsResult.error) throw postsResult.error;
+      if (profileResult.error) throw profileResult.error;
 
       setAnalyses(analysesResult.data || []);
       if (analysesResult.data && analysesResult.data.length > 0) {
@@ -95,6 +104,9 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
       }));
       setPosts(postsWithCounts);
 
+      // Set the bio from the profile data
+      setBio(profileResult.data?.bio || '');
+
     } catch (err) {
       console.error('Error fetching profile data:', err);
       setError('Failed to load data');
@@ -104,12 +116,29 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
     }
   }, [targetId]);
 
+  // Call fetchData when the component mounts
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   const handleUpdateProfile = async (data: Partial<Profile>) => {
     if (!targetId) return;
 
     try {
       setIsLoading(true);
       setError(null);
+
+      // Check bio content before updating if it exists
+      if (data.bio) {
+        const moderationResult = await checkContent(data.bio);
+        if (!moderationResult.isAcceptable) {
+          // Show error toast with the specific reason from content moderation
+          toast.error(moderationResult.reason || 'This content is not allowed');
+          setError(moderationResult.reason || 'This content is not allowed');
+          setIsLoading(false);
+          return;
+        }
+      }
 
       const { error: updateError } = await supabase
         .from('profiles')
@@ -125,14 +154,22 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
           .select('*')
           .eq('id', targetId)
           .single();
-        useAuthStore.setState({ user: updatedProfile });
+
+        if (updatedProfile) {
+          useAuthStore.setState({ user: updatedProfile });
+          // Update local bio state
+          setBio(updatedProfile.bio || '');
+        }
       }
 
       setIsEditing(false);
       await fetchData();
+      toast.success('Profile updated successfully');
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update profile');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -212,13 +249,6 @@ export const useProfile = ({ profileId, isOwnProfile = false }: UseProfileOption
 
     fetchConnectionStatus();
   }, [user, profileId, isOwnProfile]);
-
-  // Initial data fetch
-  useEffect(() => {
-    if (targetId) {
-      fetchData();
-    }
-  }, [targetId, fetchData]);
 
   return {
     analyses,

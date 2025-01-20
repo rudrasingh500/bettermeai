@@ -9,6 +9,8 @@ import { PostSkeleton } from '../shared/PostSkeleton';
 import { PageTransition } from '../layout/PageTransition';
 import { useProfile } from '../../hooks/useProfile';
 import { usePostInteractions } from '../../hooks/usePostInteractions';
+import { useContentModeration } from '../../lib/contentModeration';
+import { toast } from 'react-hot-toast';
 
 export const UserProfile = () => {
   const { user, isLoading: authLoading, initialized } = useAuthStore();
@@ -16,6 +18,7 @@ export const UserProfile = () => {
   const [activeTab, setActiveTab] = useState<'analyses' | 'posts'>('analyses');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { checkContent } = useContentModeration();
 
   const {
     analyses,

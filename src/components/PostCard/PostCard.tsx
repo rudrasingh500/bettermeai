@@ -4,6 +4,8 @@ import { RatingDisplay } from '../Analysis/RatingDisplay';
 import type { Post, Comment, Profile } from '../../lib/types';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../lib/store';
+import { useContentModeration } from '../../lib/contentModeration';
+import { toast } from 'react-hot-toast';
 
 interface PostCardProps {
   post: Post;
@@ -25,6 +27,8 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [showCommentInput, setShowCommentInput] = React.useState(false);
   const [commentText, setCommentText] = React.useState('');
   const [post, setPost] = React.useState(initialPost);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const { checkContent } = useContentModeration();
 
   // Update post when initialPost changes
   React.useEffect(() => {
@@ -55,10 +59,25 @@ export const PostCard: React.FC<PostCardProps> = ({
   };
 
   const handleComment = async (content: string) => {
+    if (!content.trim()) return;
+    
     try {
+      setIsSubmitting(true);
+      
+      // Check content before posting
+      const moderationResult = await checkContent(content);
+      if (!moderationResult.isAcceptable) {
+        // Show error toast with the specific reason from content moderation
+        toast.error(moderationResult.reason || 'This content is not allowed');
+        // Reset comment text if content is not acceptable
+        setCommentText('');
+        setIsSubmitting(false); // Make sure to reset submitting state
+        return;
+      }
+
       if (onComment && user) {
         // Optimistically add the comment to the UI
-        const tempComment: Comment = {
+        const newComment: Comment = {
           id: Date.now().toString(), // Temporary ID
           content,
           created_at: new Date().toISOString(),
@@ -68,7 +87,7 @@ export const PostCard: React.FC<PostCardProps> = ({
             id: user.id,
             username: user.username || '',
             avatar_url: user.avatar_url,
-            gender: 'other',
+            gender: 'other' as const,
             bio: '',
             rating: null,
             created_at: new Date().toISOString(),
@@ -76,18 +95,24 @@ export const PostCard: React.FC<PostCardProps> = ({
           }
         };
 
+        // Actually send the comment to the server first
+        await onComment(post.id, content);
+
+        // If successful, update the UI
         setPost(prevPost => ({
           ...prevPost,
-          comments: [...(prevPost.comments || []), tempComment]
+          comments: [...(prevPost.comments || []), newComment]
         }));
 
-        // Actually send the comment to the server
-        await onComment(post.id, content);
+        setCommentText('');
+        setShowCommentInput(false);
+        toast.success('Comment posted successfully');
       }
     } catch (err) {
       console.error('Error posting comment:', err);
-      // Revert the optimistic update on error
-      setPost(initialPost);
+      toast.error('Failed to post comment');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -345,24 +370,24 @@ export const PostCard: React.FC<PostCardProps> = ({
             placeholder="Write a comment..."
             className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && commentText.trim()) {
+              if (e.key === 'Enter' && commentText.trim() && !isSubmitting) {
                 handleComment(commentText);
-                setCommentText('');
-                setShowCommentInput(false);
               }
             }}
+            disabled={isSubmitting}
           />
           <button
             onClick={() => {
-              if (commentText.trim()) {
+              if (commentText.trim() && !isSubmitting) {
                 handleComment(commentText);
-                setCommentText('');
-                setShowCommentInput(false);
               }
             }}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={isSubmitting}
+            className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            Post
+            {isSubmitting ? 'Posting...' : 'Post'}
           </button>
         </div>
       )}
