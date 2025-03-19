@@ -1,12 +1,13 @@
 # BetterMe.AI
 
-BetterMe.AI is a community wellness platform designed to help users improve their mental and physical wellbeing through a supportive online community.
+BetterMe.AI is a personal development platform that helps users optimize their physical appearance and wellness through AI-powered insights and a supportive community. The platform uses advanced image analysis via the Gemini API to provide personalized recommendations for improvement.
 
 ## Features
 
+- **AI-Powered Assessment**: Personalized recommendations based on user-submitted photos to enhance physical appearance and wellness
+= **Improvement Tracking**: Monitor progress over time with data-driven insights
 - **User Authentication**: Secure login and registration system
 - **Content Moderation**: Automated and manual content filtering to maintain a positive environment
-- **Mobile Responsive**: Dedicated support for Android and iOS devices
 - **Real-time Updates**: Instant notifications and content updates
 
 ## Tech Stack
